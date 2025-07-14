@@ -1,0 +1,52 @@
+{
+  "name": "buai-agent",
+  "description": "Stellar blockchain interaction agent using LangGraph",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsc -w & nodemon dist/server.js",
+    "format": "prettier --write \"**/*.ts\"",
+    "format:check": "prettier --check \"**/*.ts\"",
+    "vercel-build": "npm run build"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^0.3.15",
+    "@langchain/community": "^0.3.34",
+    "@langchain/core": "^0.3.42",
+    "@langchain/groq": "^0.2.3",
+    "@langchain/langgraph": "^0.2.54",
+    "@langchain/ollama": "^0.2.3",
+    "@langchain/openai": "^0.4.4",
+    "@privy-io/server-auth": "^1.28.2",
+    "@stellar/stellar-sdk": "^13.1.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node-fetch": "^2.6.12",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.0.3",
+    "ethers": "6.11.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.16.1",
+    "nanoid": "^5.1.5",
+    "node-fetch": "^3.3.2",
+    "vercel": "^44.4.1",
+    "viem": "^2.31.7",
+    "zod": "^3.25.64"
+  },
+  "devDependencies": {
+    "@tsconfig/recommended": "^1.0.2",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "nodemon": "^3.0.3",
+    "prettier": "^2.8.3",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
