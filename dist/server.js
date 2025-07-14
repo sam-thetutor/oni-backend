@@ -18,7 +18,7 @@ config();
 const app = express();
 const PORT = process.env.PORT || 3030;
 const corsOptions = {
-    origin: '*',
+    origin: ["http://localhost:5173"],
     credentials: false,
     optionsSuccessStatus: 200
 };
@@ -36,29 +36,8 @@ app.get('/health', (req, res) => {
 app.get('/test', (req, res) => {
     res.json({
         message: 'Backend API is working!',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development',
-        mongodbUri: process.env.MONGODB_URI ? 'Set' : 'Not set',
-        encryptionKey: process.env.ENCRYPTION_KEY ? 'Set' : 'Not set'
+        timestamp: new Date().toISOString()
     });
-});
-app.get('/debug/db', async (req, res) => {
-    try {
-        const mongoose = await import('mongoose');
-        const dbState = mongoose.connection.readyState;
-        const states = ['disconnected', 'connected', 'connecting', 'disconnecting'];
-        res.json({
-            databaseState: states[dbState],
-            readyState: dbState,
-            message: dbState === 1 ? 'Database is connected' : 'Database is not connected'
-        });
-    }
-    catch (error) {
-        res.status(500).json({
-            error: 'Failed to check database status',
-            message: error instanceof Error ? error.message : 'Unknown error'
-        });
-    }
 });
 app.use('/api/contract', authenticateToken, setUserContext, contractRoutes);
 app.use('/api/gamification', setUserContext, gamificationRoutes);
