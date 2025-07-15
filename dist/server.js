@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { config } from "dotenv";
+import { createServer } from "http";
 import { graph } from "./index.js";
 import { HumanMessage } from "@langchain/core/messages";
 import { memoryStore } from "./memory.js";
@@ -15,6 +16,7 @@ import dcaRoutes from "./routes/dca.js";
 import { DCAExecutorService } from "./services/dca-executor.js";
 import { setUserContext } from "./middleware/setUserContext.js";
 import mongoose from "mongoose";
+import { initializeSocket, closeSocket } from "./socket/index.js";
 config();
 const app = express();
 const PORT = process.env.PORT || 3030;
@@ -191,6 +193,8 @@ app.use('*', (req, res) => {
         message: `Route ${req.method} ${req.originalUrl} not found`
     });
 });
+
+const server = createServer(app);
 const startServer = async () => {
     try {
         try {
@@ -208,10 +212,22 @@ const startServer = async () => {
         catch (dcaError) {
             console.warn('⚠️ DCA executor failed to start (continuing without DCA):', dcaError);
         }
-        app.listen(PORT, () => {
+
+        // Initialize WebSocket server
+        try {
+            console.log('🔌 Attempting to initialize WebSocket server...');
+            initializeSocket(server);
+            console.log('✅ WebSocket server initialized successfully');
+        } catch (wsError) {
+            console.error('❌ WebSocket initialization failed:', wsError);
+            console.warn('⚠️ Continuing without WebSocket support');
+        }
+
+        server.listen(PORT, () => {
             console.log(`🚀 Server running on port ${PORT}`);
             console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
             console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+            console.log(`🔌 WebSocket ready on ws://localhost:${PORT}`);
         });
     }
     catch (error) {
@@ -222,11 +238,13 @@ const startServer = async () => {
 process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully');
     DCAExecutorService.stopExecutor();
+    closeSocket();
     process.exit(0);
 });
 process.on('SIGINT', () => {
     console.log('SIGINT received, shutting down gracefully');
     DCAExecutorService.stopExecutor();
+    closeSocket();
     process.exit(0);
 });
 startServer();

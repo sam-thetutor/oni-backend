@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { config } from "dotenv";
+import { createServer } from "http";
 import { graph } from "./index.js";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { memoryStore } from "./memory.js";
@@ -14,13 +15,16 @@ import { priceDataRoutes } from "./routes/price-data.js";
 import dcaRoutes from "./routes/dca.js";
 import { PriceCacheService } from "./services/price-cache.js";
 import { DCAExecutorService } from "./services/dca-executor.js";
+import { CronService } from "./services/cronService.js";
 import { setCurrentUserId } from "./tools.js";
 import {setUserContext} from "./middleware/setUserContext.js"
 import mongoose from "mongoose";
+import { initializeSocket, closeSocket } from "./socket/index.js";
 
 config();
 
 const app = express();
+const server = createServer(app);
 const PORT = process.env.PORT || 3030;
 
 // Simple rate limiting for message endpoint
@@ -277,11 +281,30 @@ const startServer = async () => {
       console.warn('⚠️ DCA executor failed to start (continuing without DCA):', dcaError);
     }
 
+    // Initialize cron service
+    try {
+      CronService.getInstance().init();
+      console.log('✅ Cron service initialized');
+    } catch (cronError) {
+      console.warn('⚠️ Cron service failed to start (continuing without cron):', cronError);
+    }
+
+    // Initialize WebSocket server
+    try {
+      console.log('🔌 Attempting to initialize WebSocket server...');
+      initializeSocket(server);
+      console.log('✅ WebSocket server initialized successfully');
+    } catch (wsError) {
+      console.error('❌ WebSocket initialization failed:', wsError);
+      console.warn('⚠️ Continuing without WebSocket support');
+    }
+
     // Start server
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`🔌 WebSocket ready on ws://localhost:${PORT}`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -293,12 +316,16 @@ const startServer = async () => {
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   DCAExecutorService.stopExecutor();
+  CronService.getInstance().stop();
+  closeSocket();
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
   DCAExecutorService.stopExecutor();
+  CronService.getInstance().stop();
+  closeSocket();
   process.exit(0);
 });
 

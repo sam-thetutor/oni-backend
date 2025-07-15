@@ -10,6 +10,8 @@ export interface IUser extends Document {
   chainId: number;
   points: number;
   totalVolume: number;
+  weeklyPoints?: number;
+  weeklyVolume?: number;
   createdAt: Date;
   updatedAt: Date;
   username?: string;
@@ -18,6 +20,8 @@ export interface IUser extends Document {
   comparePrivateKey(privateKey: string): Promise<boolean>;
   addPoints(points: number): Promise<void>;
   addVolume(amount: number): Promise<void>;
+  addWeeklyPoints(points: number): Promise<void>;
+  addWeeklyVolume(amount: number): Promise<void>;
 }
 
 const UserSchema = new Schema<IUser>({
@@ -69,6 +73,16 @@ const UserSchema = new Schema<IUser>({
     required: true,
     default: 0,
   },
+  weeklyPoints: {
+    type: Number,
+    required: false,
+    default: 0,
+  },
+  weeklyVolume: {
+    type: Number,
+    required: false,
+    default: 0,
+  },
 }, {
   timestamps: true,
 });
@@ -107,6 +121,18 @@ UserSchema.methods.addPoints = async function(points: number): Promise<void> {
 // Method to add volume to user
 UserSchema.methods.addVolume = async function(amount: number): Promise<void> {
   this.totalVolume += amount;
+  await this.save();
+};
+
+// Method to add weekly points to user
+UserSchema.methods.addWeeklyPoints = async function(points: number): Promise<void> {
+  this.weeklyPoints = (this.weeklyPoints || 0) + points;
+  await this.save();
+};
+
+// Method to add weekly volume to user
+UserSchema.methods.addWeeklyVolume = async function(amount: number): Promise<void> {
+  this.weeklyVolume = (this.weeklyVolume || 0) + amount;
   await this.save();
 };
 

@@ -396,6 +396,54 @@ export class SwapService {
       
       if (swapReceipt.status === 'success') {
         console.log(`✅ tUSDC to XFI swap successful. Transaction: ${swapReceipt.transactionHash}`);
+        
+        // Emit real-time events for balance updates
+        try {
+          const { getIO } = await import('../socket/index.js');
+          const { emitBalanceUpdate, emitNewTransaction, emitTransactionSuccess } = await import('../socket/events.js');
+          const io = getIO();
+          
+          // Emit transaction success
+          emitTransactionSuccess(io, user.walletAddress, {
+            transactionHash: swapReceipt.transactionHash,
+            from: user.walletAddress,
+            to: 'Swap Contract',
+            value: `${tUSDCAmount} tUSDC → ${quote.toAmount} XFI`,
+            status: 'success',
+            explorerUrl: `https://test.xfiscan.com/tx/${swapReceipt.transactionHash}`
+          });
+
+          // Emit new transaction
+          emitNewTransaction(io, user.walletAddress, {
+            hash: swapReceipt.transactionHash,
+            from: user.walletAddress,
+            to: 'Swap Contract',
+            value: `${tUSDCAmount} tUSDC → ${quote.toAmount} XFI`,
+            status: 'success',
+            timestamp: new Date().toISOString()
+          });
+
+          // Get and emit updated balance
+          setTimeout(async () => {
+            try {
+              const { BlockchainService } = await import('./blockchain.js');
+              const balance = await BlockchainService.getBalance(user.walletAddress);
+              emitBalanceUpdate(io, user.walletAddress, {
+                address: balance.address,
+                balance: balance.balance,
+                formatted: balance.formatted,
+                symbol: 'XFI'
+              });
+            } catch (balanceError) {
+              console.error('Error fetching updated balance:', balanceError);
+            }
+          }, 2000); // Wait 2 seconds for blockchain to update
+
+        } catch (socketError) {
+          console.error('Error emitting real-time events:', socketError);
+          // Don't fail the swap if real-time updates fail
+        }
+        
         return {
           success: true,
           transactionHash: swapReceipt.transactionHash,
@@ -450,6 +498,54 @@ export class SwapService {
       
       if (swapReceipt.status === 'success') {
         console.log(`✅ XFI to tUSDC swap successful. Transaction: ${swapReceipt.transactionHash}`);
+        
+        // Emit real-time events for balance updates
+        try {
+          const { getIO } = await import('../socket/index.js');
+          const { emitBalanceUpdate, emitNewTransaction, emitTransactionSuccess } = await import('../socket/events.js');
+          const io = getIO();
+          
+          // Emit transaction success
+          emitTransactionSuccess(io, user.walletAddress, {
+            transactionHash: swapReceipt.transactionHash,
+            from: user.walletAddress,
+            to: 'Swap Contract',
+            value: `${xfiAmount} XFI → ${quote.toAmount} tUSDC`,
+            status: 'success',
+            explorerUrl: `https://test.xfiscan.com/tx/${swapReceipt.transactionHash}`
+          });
+
+          // Emit new transaction
+          emitNewTransaction(io, user.walletAddress, {
+            hash: swapReceipt.transactionHash,
+            from: user.walletAddress,
+            to: 'Swap Contract',
+            value: `${xfiAmount} XFI → ${quote.toAmount} tUSDC`,
+            status: 'success',
+            timestamp: new Date().toISOString()
+          });
+
+          // Get and emit updated balance
+          setTimeout(async () => {
+            try {
+              const { BlockchainService } = await import('./blockchain.js');
+              const balance = await BlockchainService.getBalance(user.walletAddress);
+              emitBalanceUpdate(io, user.walletAddress, {
+                address: balance.address,
+                balance: balance.balance,
+                formatted: balance.formatted,
+                symbol: 'XFI'
+              });
+            } catch (balanceError) {
+              console.error('Error fetching updated balance:', balanceError);
+            }
+          }, 2000); // Wait 2 seconds for blockchain to update
+
+        } catch (socketError) {
+          console.error('Error emitting real-time events:', socketError);
+          // Don't fail the swap if real-time updates fail
+        }
+        
         return {
           success: true,
           transactionHash: swapReceipt.transactionHash,
@@ -604,6 +700,54 @@ export class SwapService {
       
       if (liquidityReceipt.status === 'success') {
         console.log(`✅ Liquidity added successfully. Transaction: ${liquidityReceipt.transactionHash}`);
+        
+        // Emit real-time events for balance updates
+        try {
+          const { getIO } = await import('../socket/index.js');
+          const { emitBalanceUpdate, emitNewTransaction, emitTransactionSuccess } = await import('../socket/events.js');
+          const io = getIO();
+          
+          // Emit transaction success
+          emitTransactionSuccess(io, user.walletAddress, {
+            transactionHash: liquidityReceipt.transactionHash,
+            from: user.walletAddress,
+            to: 'Liquidity Pool',
+            value: `${xfiAmount} XFI + ${tUSDCAmount} tUSDC`,
+            status: 'success',
+            explorerUrl: `https://test.xfiscan.com/tx/${liquidityReceipt.transactionHash}`
+          });
+
+          // Emit new transaction
+          emitNewTransaction(io, user.walletAddress, {
+            hash: liquidityReceipt.transactionHash,
+            from: user.walletAddress,
+            to: 'Liquidity Pool',
+            value: `${xfiAmount} XFI + ${tUSDCAmount} tUSDC`,
+            status: 'success',
+            timestamp: new Date().toISOString()
+          });
+
+          // Get and emit updated balance
+          setTimeout(async () => {
+            try {
+              const { BlockchainService } = await import('./blockchain.js');
+              const balance = await BlockchainService.getBalance(user.walletAddress);
+              emitBalanceUpdate(io, user.walletAddress, {
+                address: balance.address,
+                balance: balance.balance,
+                formatted: balance.formatted,
+                symbol: 'XFI'
+              });
+            } catch (balanceError) {
+              console.error('Error fetching updated balance:', balanceError);
+            }
+          }, 2000); // Wait 2 seconds for blockchain to update
+
+        } catch (socketError) {
+          console.error('Error emitting real-time events:', socketError);
+          // Don't fail the transaction if real-time updates fail
+        }
+        
         return {
           success: true,
           transactionHash: liquidityReceipt.transactionHash,

@@ -12,6 +12,8 @@ import { CRYPTO_ASSISTANT_TOOLS } from "./tools/crypto-assistant.js";
 import { SwapService } from "./services/swap.js";
 import { XFIPriceChartTool, XFIMarketDataTool, XFITradingSignalsTool, XFIPricePredictionTool, XFIMarketComparisonTool } from './tools/price-analysis.js';
 import { createDCAOrder, getUserDCAOrders, cancelDCAOrder, getDCAOrderStatus, getSwapQuote, getDCASystemStatus, getUserTokenBalances } from './tools/dca.js';
+import { emitBalanceUpdate, emitNewTransaction, emitPointsEarned, emitTransactionSuccess } from './socket/events.js';
+import { getIO } from './socket/index.js';
 let currentUserId = null;
 export const setCurrentUserId = (userId) => {
     currentUserId = userId;
@@ -178,6 +180,60 @@ class SendTransactionTool extends StructuredTool {
             if ('points' in transaction) {
                 response.points = transaction.points;
             }
+
+            // Emit real-time events
+            try {
+                const io = getIO();
+                
+                // Emit transaction success
+                emitTransactionSuccess(io, walletAddress, {
+                    transactionHash: transaction.hash,
+                    from: transaction.from,
+                    to: transaction.to,
+                    value: transaction.value,
+                    status: transaction.status,
+                    explorerUrl: transaction.transactionUrl || null
+                });
+
+                // Emit new transaction
+                emitNewTransaction(io, walletAddress, {
+                    hash: transaction.hash,
+                    from: transaction.from,
+                    to: transaction.to,
+                    value: transaction.value,
+                    status: transaction.status,
+                    timestamp: new Date().toISOString()
+                });
+
+                // Emit points earned if any
+                if (transaction.reward) {
+                    emitPointsEarned(io, walletAddress, {
+                        points: transaction.reward.totalPoints,
+                        reason: transaction.reward.reason,
+                        transactionHash: transaction.hash
+                    });
+                }
+
+                // Get and emit updated balance
+                setTimeout(async () => {
+                    try {
+                        const balance = await BlockchainService.getBalance(walletAddress);
+                        emitBalanceUpdate(io, walletAddress, {
+                            address: balance.address,
+                            balance: balance.balance,
+                            formatted: balance.formatted,
+                            symbol: 'XFI'
+                        });
+                    } catch (balanceError) {
+                        console.error('Error fetching updated balance:', balanceError);
+                    }
+                }, 2000); // Wait 2 seconds for blockchain to update
+
+            } catch (socketError) {
+                console.error('Error emitting real-time events:', socketError);
+                // Don't fail the transaction if real-time updates fail
+            }
+
             return JSON.stringify(response);
         }
         catch (error) {
