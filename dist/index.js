@@ -60,9 +60,35 @@ const callModel = async (state) => {
             "• Do NOT try to call functions on tool responses - just present the information directly\n" +
             "\nYou're an expert in both technical blockchain operations AND market analysis - help users understand the CrossFi ecosystem comprehensively!",
     };
-    const llmWithTools = llm.bindTools(ALL_TOOLS_LIST);
-    const result = await llmWithTools.invoke([systemMessage, ...messages]);
-    return { messages: result, userId };
+    try {
+        const llmWithTools = llm.bindTools(ALL_TOOLS_LIST);
+        const result = await llmWithTools.invoke([systemMessage, ...messages]);
+        return { messages: result, userId };
+    }
+    catch (error) {
+        console.error('LLM Error:', error);
+        if (error.message?.includes('Rate limit') || error.message?.includes('429') || error.message?.includes('500648')) {
+            const fallbackMessage = {
+                role: "ai",
+                content: `I apologize, but I'm currently experiencing high demand and can't process your request right now. 
+
+**What you can do:**
+• Try again in a few minutes
+• Check your wallet balance or transaction history using the app's built-in features
+• Visit the CrossFi dashboard for real-time network information
+
+**Available Features (even when AI is busy):**
+• View your wallet balance and transaction history
+• Create and manage payment links
+• Check the leaderboard and your gamification stats
+• Monitor DCA orders and swap tokens
+
+I'll be back to help you with more complex tasks soon! 🚀`
+            };
+            return { messages: [fallbackMessage], userId };
+        }
+        throw error;
+    }
 };
 const shouldContinue = (state) => {
     const { messages } = state;

@@ -63,6 +63,8 @@ const createGroqLLM = () => {
     model: model,
     temperature: 0,
     maxTokens: 4096,
+    maxRetries: 3,
+    timeout: 30000,
   });
 };
 
