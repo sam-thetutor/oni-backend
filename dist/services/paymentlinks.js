@@ -14,26 +14,20 @@ export class PaymentLinkService {
     }
     static async createPaymentLinkOnChain(privateKey, linkID, amount) {
         try {
-            console.log('Creating payment link on chain:', { linkID, amount });
             const walletClient = createWalletClientFromPrivateKey(privateKey);
             if (!walletClient.account) {
                 throw new Error('No account found in wallet client');
             }
-            console.log('Wallet client created for address:', walletClient.account.address);
             const { parseEther } = await import('viem');
             const { PAYLINK_CONTRACT_ADDRESS } = await import('../constants/contract.js');
             const { PAYLINK_ABI } = await import('../constants/abi.js');
             const amountInWei = parseEther(amount);
-            console.log('Amount converted to Wei:', amountInWei.toString());
-            console.log('Calling contract at:', PAYLINK_CONTRACT_ADDRESS);
-            console.log('With args:', [linkID, amountInWei]);
             const hash = await walletClient.writeContract({
                 address: PAYLINK_CONTRACT_ADDRESS,
                 abi: PAYLINK_ABI,
                 functionName: 'createFixedPaymentLink',
                 args: [linkID, amountInWei],
             });
-            console.log('Payment link created on chain:', hash);
             return hash;
         }
         catch (error) {
@@ -43,23 +37,18 @@ export class PaymentLinkService {
     }
     static async createGlobalPaymentLinkOnChain(privateKey, linkID) {
         try {
-            console.log('Creating global payment link on chain:', { linkID });
             const walletClient = createWalletClientFromPrivateKey(privateKey);
             if (!walletClient.account) {
                 throw new Error('No account found in wallet client');
             }
-            console.log('Wallet client created for address:', walletClient.account.address);
             const { PAYLINK_CONTRACT_ADDRESS } = await import('../constants/contract.js');
             const { PAYLINK_ABI } = await import('../constants/abi.js');
-            console.log('Calling contract at:', PAYLINK_CONTRACT_ADDRESS);
-            console.log('With args:', [linkID]);
             const hash = await walletClient.writeContract({
                 address: PAYLINK_CONTRACT_ADDRESS,
                 abi: PAYLINK_ABI,
                 functionName: 'createGlobalPaymentLink',
                 args: [linkID],
             });
-            console.log('Global payment link created on chain:', hash);
             return hash;
         }
         catch (error) {
@@ -80,20 +69,14 @@ export class PaymentLinkService {
     }
     static async contributeToGlobalPaymentLinkOnChain(privateKey, linkID, amount) {
         try {
-            console.log('Contributing to global payment link on chain:', { linkID, amount });
             const walletClient = createWalletClientFromPrivateKey(privateKey);
             if (!walletClient.account) {
                 throw new Error('No account found in wallet client');
             }
-            console.log('Wallet client created for address:', walletClient.account.address);
             const { parseEther } = await import('viem');
             const { PAYLINK_CONTRACT_ADDRESS } = await import('../constants/contract.js');
             const { PAYLINK_ABI } = await import('../constants/abi.js');
             const amountInWei = parseEther(amount);
-            console.log('Amount converted to Wei:', amountInWei.toString());
-            console.log('Calling contract at:', PAYLINK_CONTRACT_ADDRESS);
-            console.log('With args:', [linkID]);
-            console.log('With value:', amountInWei.toString());
             const hash = await walletClient.writeContract({
                 address: PAYLINK_CONTRACT_ADDRESS,
                 abi: PAYLINK_ABI,
@@ -101,7 +84,6 @@ export class PaymentLinkService {
                 args: [linkID],
                 value: amountInWei,
             });
-            console.log('Contribution to global payment link successful:', hash);
             return hash;
         }
         catch (error) {

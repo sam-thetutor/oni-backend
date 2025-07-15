@@ -1,6 +1,7 @@
 import { PaymentLink } from '../models/PaymentLink.js';
 import { ContractReadService } from '../services/contractread.js';
 import { z } from 'zod';
+import mongoose from 'mongoose';
 const getPaginationSchema = z.object({
     page: z.string().optional().transform((val) => val ? parseInt(val) : 1),
     limit: z.string().optional().transform((val) => val ? parseInt(val) : 10),
@@ -15,7 +16,6 @@ export class UserPaymentLinksController {
             }
             const { page, limit, type } = getPaginationSchema.parse(req.query);
             const offset = (page - 1) * limit;
-            console.log(`Fetching payment links for user ${user.id}, page: ${page}, limit: ${limit}, type: ${type}`);
             let filter = { userId: user.id };
             if (type === 'fixed') {
                 filter.amount = { $gt: 0 };
@@ -110,7 +110,6 @@ export class UserPaymentLinksController {
             if (!linkId) {
                 return res.status(400).json({ error: 'Link ID is required' });
             }
-            console.log(`Fetching payment link ${linkId} for user ${user.id}`);
             const paymentLink = await PaymentLink.findOne({
                 linkId: linkId,
                 userId: user.id
@@ -177,7 +176,20 @@ export class UserPaymentLinksController {
             if (!user) {
                 return res.status(401).json({ error: 'User not authenticated' });
             }
-            console.log(`Fetching payment link stats for user ${user.id}`);
+            if (!PaymentLink) {
+                console.error('PaymentLink model is not available');
+                return res.status(500).json({
+                    success: false,
+                    error: 'Database model not available'
+                });
+            }
+            if (mongoose.connection.readyState !== 1) {
+                console.error('Database not connected, readyState:', mongoose.connection.readyState);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Database not connected'
+                });
+            }
             const paymentLinks = await PaymentLink.find({ userId: user.id }).lean();
             const fixedLinks = paymentLinks.filter(link => link.amount > 0);
             const globalLinks = paymentLinks.filter(link => link.amount === 0);
@@ -231,6 +243,20 @@ export class UserPaymentLinksController {
         }
         catch (error) {
             console.error('Error fetching payment link stats:', error);
+            if (error.name === 'MongoNetworkError' || error.name === 'MongoServerSelectionError') {
+                return res.status(503).json({
+                    success: false,
+                    error: 'Database connection error',
+                    details: 'Unable to connect to database'
+                });
+            }
+            if (error.name === 'ValidationError') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Validation error',
+                    details: error.message
+                });
+            }
             res.status(500).json({
                 success: false,
                 error: 'Failed to fetch payment link statistics',
@@ -248,7 +274,6 @@ export class UserPaymentLinksController {
             if (!linkId) {
                 return res.status(400).json({ error: 'Link ID is required' });
             }
-            console.log(`Deleting payment link ${linkId} for user ${user.id}`);
             const paymentLink = await PaymentLink.findOneAndUpdate({
                 linkId: linkId,
                 userId: user.id

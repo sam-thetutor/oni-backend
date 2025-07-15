@@ -16,11 +16,57 @@ import { PriceCacheService } from "./services/price-cache.js";
 import { DCAExecutorService } from "./services/dca-executor.js";
 import { setCurrentUserId } from "./tools.js";
 import {setUserContext} from "./middleware/setUserContext.js"
+import mongoose from "mongoose";
 
 config();
 
 const app = express();
 const PORT = process.env.PORT || 3030;
+
+// Simple rate limiting for message endpoint
+const messageRateLimit = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const MAX_MESSAGES_PER_MINUTE = 10;
+
+// Rate limiting middleware for messages
+const rateLimitMessages = (req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) => {
+  const userId = req.user?.id;
+  
+  if (!userId) {
+    return res.status(401).json({ error: 'User not authenticated' });
+  }
+
+  const now = Date.now();
+  const userLimit = messageRateLimit.get(userId);
+  
+  if (!userLimit || now > userLimit.resetTime) {
+    // Reset or create new limit
+    messageRateLimit.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    return next();
+  }
+
+  if (userLimit.count >= MAX_MESSAGES_PER_MINUTE) {
+    return res.status(429).json({
+      error: 'Too many messages',
+      message: 'Please wait a moment before sending another message.',
+      retryAfter: Math.ceil((userLimit.resetTime - now) / 1000)
+    });
+  }
+
+  // Increment count
+  userLimit.count++;
+  return next();
+};
+
+// Clean up expired rate limits periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, limit] of messageRateLimit.entries()) {
+    if (now > limit.resetTime) {
+      messageRateLimit.delete(userId);
+    }
+  }
+}, 5 * 60 * 1000); // Clean up every 5 minutes
 
 // CORS configuration for production
 const corsOptions = {
@@ -51,23 +97,79 @@ app.get('/test', (req, res) => {
   });
 }); 
 
+// Test payment links endpoint (no auth required)
+app.get('/api/test/payment-links', (req, res) => {
+  res.json({ 
+    message: 'Payment links API is accessible!',
+    timestamp: new Date().toISOString(),
+    routes: {
+      stats: '/api/user/payment-links/stats',
+      list: '/api/user/payment-links',
+      create: 'POST /api/user/payment-links'
+    }
+  });
+}); 
+
+// Payment links health check (no auth required)
+app.get('/api/payment-links/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    readyState: mongoose.connection.readyState
+  });
+}); 
+
+// Test payment link creation (no auth required - for debugging)
+app.get('/api/test/create-payment-link', async (req, res) => {
+  try {
+    // Test if PaymentLink model is available
+    const { PaymentLink } = await import('./models/PaymentLink.js');
+    
+    if (!PaymentLink) {
+      return res.status(500).json({ 
+        success: false,
+        error: 'PaymentLink model not available' 
+      });
+    }
+    
+    // Test database connection
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ 
+        success: false,
+        error: 'Database not connected',
+        readyState: mongoose.connection.readyState
+      });
+    }
+    
+    res.json({ 
+      success: true,
+      message: 'Payment link creation test passed',
+      database: 'connected',
+      model: 'available'
+    });
+  } catch (error: any) {
+    res.status(500).json({ 
+      success: false,
+      error: 'Test failed',
+      details: error.message 
+    });
+  }
+}); 
+
 
 // API routes
 app.use('/api/contract', authenticateToken, setUserContext, contractRoutes);
-app.use('/api/gamification', setUserContext, gamificationRoutes);
+app.use('/api/gamification' , gamificationRoutes);
 app.use('/api/user/wallet', authenticateToken, setUserContext, userWalletRoutes);
-app.use('/api/user/payment-links', authenticateToken, setUserContext, userPaymentLinksRoutes);
+app.use('/api/user/payment-links', setUserContext, userPaymentLinksRoutes);
 app.use('/api/price-data', authenticateToken, setUserContext, priceDataRoutes);
 app.use('/api/dca', authenticateToken, setUserContext, dcaRoutes);
 // Main message endpoint
-app.post('/message', authenticateToken, requireWalletConnection, async (req: AuthenticatedRequest, res) => {
+app.post('/message', authenticateToken, requireWalletConnection, rateLimitMessages, async (req: AuthenticatedRequest, res) => {
   try {
     const { message } = req.body;
     const user = req.user!;
-
-    console.log(`Processing message from user ${user.id}: ${message}`);
-
-    console.log("user connectred waller :",user)
 
     // Add user message to memory
     memoryStore.addMessage(user.id, new HumanMessage(message));
@@ -90,14 +192,40 @@ app.post('/message', authenticateToken, requireWalletConnection, async (req: Aut
     // Extract the response
     const response = aiMessage?.content || "I'm sorry, I couldn't generate a response.";
 
-    console.log(`Response to user ${user.id}: ${response}`);
-
     res.json({ response });
   } catch (error: any) {
     console.error('Error processing message:', error);
+    
+    // Handle specific LLM rate limiting errors
+    if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
+      return res.status(429).json({ 
+        error: 'Service temporarily unavailable',
+        message: 'The AI service is currently experiencing high demand. Please try again in a few minutes.',
+        retryAfter: 300 // 5 minutes
+      });
+    }
+    
+    // Handle LLM service errors
+    if (error.message?.includes('LLM service error')) {
+      return res.status(503).json({ 
+        error: 'AI service unavailable',
+        message: 'The AI service is temporarily unavailable. Please try again later.',
+        retryAfter: 60 // 1 minute
+      });
+    }
+    
+    // Handle authentication errors
+    if (error.message?.includes('Authentication failed')) {
+      return res.status(401).json({ 
+        error: 'Authentication failed',
+        message: 'Please check your API configuration and try again.'
+      });
+    }
+    
+    // Generic error response
     res.status(500).json({ 
       error: 'Internal server error',
-      message: error.message 
+      message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong. Please try again.'
     });
   }
 });
@@ -128,6 +256,7 @@ const startServer = async () => {
       console.log('✅ Connected to MongoDB');
     } catch (dbError) {
       console.warn('⚠️ Database connection failed (continuing without DB):', dbError);
+      // Don't exit the process, just continue without database
     }
 
     // Initialize services (PriceCacheService doesn't need initialization)

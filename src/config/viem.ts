@@ -40,8 +40,6 @@ export const publicClient = createPublicClient({
 
   // Create wallet client factory for transactions
   export function createWalletClientFromPrivateKey(privateKey: string) {
-    console.log('Creating wallet client from private key:', privateKey);
-
     // Decrypt the private key if it's encrypted
     let decryptedPrivateKey = privateKey;
     if (EncryptionService.isEncrypted(privateKey)) {

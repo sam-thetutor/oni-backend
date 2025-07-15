@@ -50,14 +50,7 @@ export const authenticateToken = async (
         dbUser: dbUser, // Store the full user document
       };
 
-      console.log('Authenticated user:', {
-        privyId: req.user.id,
-        privyWalletAddress: privyUser.wallet.address, // Privy wallet
-        walletAddress: req.user.dbUser.walletAddress, // Our database wallet
-        email: req.user.email,
-        dbUserExists: !!req.user.dbUser,
-        dbUser: req.user.dbUser,
-      });
+
 
       next();
     } catch (tokenError) {

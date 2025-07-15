@@ -32,7 +32,6 @@ export const publicClient = createPublicClient({
     transport: http(RPC_URL),
 });
 export function createWalletClientFromPrivateKey(privateKey) {
-    console.log('Creating wallet client from private key:', privateKey);
     let decryptedPrivateKey = privateKey;
     if (EncryptionService.isEncrypted(privateKey)) {
         const encryptionKey = process.env.ENCRYPTION_KEY;

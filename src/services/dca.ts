@@ -94,7 +94,7 @@ export class DCAService {
       });
 
       await dcaOrder.save();
-      console.log(`Created DCA order ${dcaOrder._id} for user ${params.userId}`);
+
       
       return dcaOrder;
     } catch (error) {
@@ -258,7 +258,7 @@ export class DCAService {
       order.status = 'cancelled';
       await order.save();
       
-      console.log(`DCA order ${orderId} cancelled by user ${userId}`);
+      
       return true;
     } catch (error) {
       console.error('Error cancelling DCA order:', error);
@@ -303,7 +303,7 @@ export class DCAService {
       Object.assign(order, updates);
       await order.save();
       
-      console.log(`DCA order ${orderId} updated by user ${userId}`);
+      
       return order;
     } catch (error) {
       console.error('Error updating DCA order:', error);

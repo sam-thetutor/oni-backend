@@ -9,7 +9,7 @@ export const connectDB = async () => {
     }
     catch (error) {
         console.error('❌ MongoDB connection error:', error);
-        process.exit(1);
+        throw error;
     }
 };
 export const disconnectDB = async () => {

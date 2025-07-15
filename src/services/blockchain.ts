@@ -94,7 +94,7 @@ export class BlockchainService {
       if (receipt.status === 'success') {
         try {
           reward = await GamificationService.awardTransactionPoints(user, amount);
-          console.log(`🎉 Transaction successful! Awarded ${reward.totalPoints} points`);
+
         } catch (error) {
           console.error('Failed to award points:', error);
           // Don't fail the transaction if points awarding fails

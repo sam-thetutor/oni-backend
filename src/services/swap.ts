@@ -478,7 +478,7 @@ export class SwapService {
   ): Promise<any[]> {
     // This would query a database of swap transactions
     // For now, return empty array
-    console.log(`Getting swap history for user ${userId}, limit: ${limit}`);
+
     return [];
   }
 

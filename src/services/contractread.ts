@@ -40,7 +40,7 @@ export class ContractReadService {
 
   async checkPaymentLinkStatus(linkId: string) {
     try {
-      console.log('ContractReadService: Checking payment link status for:', linkId);
+
 
       // First check if the payment link exists
       const exists = await this.publicClient.readContract({
@@ -65,7 +65,7 @@ export class ContractReadService {
         args: [linkId],
       }) as [string, string, bigint, number]; // [creator, linkId, amount, status]
 
-      console.log('ContractReadService: Raw contract response (array format):', result);
+
 
       // Check if result is valid array with expected length
       if (!result || !Array.isArray(result) || result.length !== 4) {
@@ -124,7 +124,7 @@ export class ContractReadService {
 
   async checkGlobalPaymentLinkStatus(linkId: string) {
     try {
-      console.log('ContractReadService: Checking global payment link status for:', linkId);
+
 
       // Get global payment link details from contract - returns array format
       const result = await this.publicClient.readContract({
@@ -134,7 +134,7 @@ export class ContractReadService {
         args: [linkId],
       }) as [string, string, bigint]; // [creator, linkId, totalContributions]
 
-      console.log('ContractReadService: Raw global payment link response (array format):', result);
+
 
       // Check if result is valid array with expected length
       if (!result || !Array.isArray(result) || result.length !== 3) {

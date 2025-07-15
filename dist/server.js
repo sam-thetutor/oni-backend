@@ -14,11 +14,44 @@ import { priceDataRoutes } from "./routes/price-data.js";
 import dcaRoutes from "./routes/dca.js";
 import { DCAExecutorService } from "./services/dca-executor.js";
 import { setUserContext } from "./middleware/setUserContext.js";
+import mongoose from "mongoose";
 config();
 const app = express();
 const PORT = process.env.PORT || 3030;
+const messageRateLimit = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000;
+const MAX_MESSAGES_PER_MINUTE = 10;
+const rateLimitMessages = (req, res, next) => {
+    const userId = req.user?.id;
+    if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+    }
+    const now = Date.now();
+    const userLimit = messageRateLimit.get(userId);
+    if (!userLimit || now > userLimit.resetTime) {
+        messageRateLimit.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+        return next();
+    }
+    if (userLimit.count >= MAX_MESSAGES_PER_MINUTE) {
+        return res.status(429).json({
+            error: 'Too many messages',
+            message: 'Please wait a moment before sending another message.',
+            retryAfter: Math.ceil((userLimit.resetTime - now) / 1000)
+        });
+    }
+    userLimit.count++;
+    return next();
+};
+setInterval(() => {
+    const now = Date.now();
+    for (const [userId, limit] of messageRateLimit.entries()) {
+        if (now > limit.resetTime) {
+            messageRateLimit.delete(userId);
+        }
+    }
+}, 5 * 60 * 1000);
 const corsOptions = {
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173", "https://oni-production.up.railway.app"],
     credentials: false,
     optionsSuccessStatus: 200
 };
@@ -39,18 +72,66 @@ app.get('/test', (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
+app.get('/api/test/payment-links', (req, res) => {
+    res.json({
+        message: 'Payment links API is accessible!',
+        timestamp: new Date().toISOString(),
+        routes: {
+            stats: '/api/user/payment-links/stats',
+            list: '/api/user/payment-links',
+            create: 'POST /api/user/payment-links'
+        }
+    });
+});
+app.get('/api/payment-links/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        readyState: mongoose.connection.readyState
+    });
+});
+app.get('/api/test/create-payment-link', async (req, res) => {
+    try {
+        const { PaymentLink } = await import('./models/PaymentLink.js');
+        if (!PaymentLink) {
+            return res.status(500).json({
+                success: false,
+                error: 'PaymentLink model not available'
+            });
+        }
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(503).json({
+                success: false,
+                error: 'Database not connected',
+                readyState: mongoose.connection.readyState
+            });
+        }
+        res.json({
+            success: true,
+            message: 'Payment link creation test passed',
+            database: 'connected',
+            model: 'available'
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Test failed',
+            details: error.message
+        });
+    }
+});
 app.use('/api/contract', authenticateToken, setUserContext, contractRoutes);
-app.use('/api/gamification', setUserContext, gamificationRoutes);
+app.use('/api/gamification', gamificationRoutes);
 app.use('/api/user/wallet', authenticateToken, setUserContext, userWalletRoutes);
-app.use('/api/user/payment-links', authenticateToken, setUserContext, userPaymentLinksRoutes);
+app.use('/api/user/payment-links', setUserContext, userPaymentLinksRoutes);
 app.use('/api/price-data', authenticateToken, setUserContext, priceDataRoutes);
 app.use('/api/dca', authenticateToken, setUserContext, dcaRoutes);
-app.post('/message', authenticateToken, requireWalletConnection, async (req, res) => {
+app.post('/message', authenticateToken, requireWalletConnection, rateLimitMessages, async (req, res) => {
     try {
         const { message } = req.body;
         const user = req.user;
-        console.log(`Processing message from user ${user.id}: ${message}`);
-        console.log("user connectred waller :", user);
         memoryStore.addMessage(user.id, new HumanMessage(message));
         const history = memoryStore.getHistory(user.id);
         const result = await graph.invoke({
@@ -62,14 +143,33 @@ app.post('/message', authenticateToken, requireWalletConnection, async (req, res
             memoryStore.addMessage(user.id, aiMessage);
         }
         const response = aiMessage?.content || "I'm sorry, I couldn't generate a response.";
-        console.log(`Response to user ${user.id}: ${response}`);
         res.json({ response });
     }
     catch (error) {
         console.error('Error processing message:', error);
+        if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
+            return res.status(429).json({
+                error: 'Service temporarily unavailable',
+                message: 'The AI service is currently experiencing high demand. Please try again in a few minutes.',
+                retryAfter: 300
+            });
+        }
+        if (error.message?.includes('LLM service error')) {
+            return res.status(503).json({
+                error: 'AI service unavailable',
+                message: 'The AI service is temporarily unavailable. Please try again later.',
+                retryAfter: 60
+            });
+        }
+        if (error.message?.includes('Authentication failed')) {
+            return res.status(401).json({
+                error: 'Authentication failed',
+                message: 'Please check your API configuration and try again.'
+            });
+        }
         res.status(500).json({
             error: 'Internal server error',
-            message: error.message
+            message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong. Please try again.'
         });
     }
 });

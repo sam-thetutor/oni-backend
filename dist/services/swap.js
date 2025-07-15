@@ -297,7 +297,6 @@ export class SwapService {
         }
     }
     static async getSwapHistory(userId, limit = 10) {
-        console.log(`Getting swap history for user ${userId}, limit: ${limit}`);
         return [];
     }
     static async getBestSwapRoute(fromToken, toToken, amount) {

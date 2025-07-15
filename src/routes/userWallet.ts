@@ -17,7 +17,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     if (!dbUser || !dbUser.walletAddress) {
       return res.status(404).json({ error: 'No Oni wallet found for user' });
     }
-    console.log("dbUser", dbUser);
+
     res.json({ walletAddress: dbUser.walletAddress });
   } catch (error) {
     console.error('Error in userWallet route:', error);

@@ -97,7 +97,7 @@ export class GamificationService {
       // Add volume to user
       await user.addVolume(parseFloat(amount));
       
-      console.log(`🎉 Awarded ${reward.totalPoints} points to user ${user.privyId} for ${amount} XFI transaction`);
+
       
       return reward;
     } catch (error) {

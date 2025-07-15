@@ -35,13 +35,10 @@ export class WalletService {
       let user = await User.findOne({ frontendWalletAddress });
       
       if (user) {
-        console.log(`✅ Found existing wallet for user ${privyId}`);
-        console.log('User:', user);
         return user;
       }
 
       // Generate new random wallet for user
-      console.log(`🔄 Generating new random wallet for user ${privyId}`);
       const walletInfo = this.generateWallet();
       
       // Create new user with encrypted private key
@@ -55,7 +52,6 @@ export class WalletService {
       });
 
       await user.save();
-      console.log(`✅ Created new random wallet ${walletInfo.address} for user ${privyId}`);
       
       return user;
     } catch (error) {
@@ -81,9 +77,6 @@ export class WalletService {
    */
   static async getWalletByAddress(address: string): Promise<IUser | null> {
     try {
-      //log all users
-      const allUsers = await User.find();
-      console.log('All users:', allUsers);
       return await User.findOne({ walletAddress: address });
     } catch (error) {
       console.error('❌ Error getting wallet by address:', error);
@@ -151,7 +144,6 @@ export class WalletService {
       user.chainId = newWalletInfo.chainId;
       
       await user.save();
-      console.log(`✅ Rotated wallet to ${newWalletInfo.address} for user ${privyId}`);
       
       return user;
     } catch (error) {

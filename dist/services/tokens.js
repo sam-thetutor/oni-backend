@@ -72,14 +72,12 @@ export class TokenService {
             const knownToken = Object.values(TOKEN_METADATA).find(t => t.address.toLowerCase() === tokenAddress.toLowerCase());
             if (knownToken) {
                 try {
-                    console.log(`Getting balance for known token ${knownToken.symbol} at ${tokenAddress} for wallet ${walletAddress}`);
                     const balance = await publicClient.readContract({
                         address: tokenAddress,
                         abi: ERC20_ABI,
                         functionName: 'balanceOf',
                         args: [walletAddress],
                     });
-                    console.log(`Successfully got balance for ${knownToken.symbol}: ${balance.toString()}`);
                     return {
                         address: walletAddress,
                         balance: balance.toString(),
@@ -168,12 +166,10 @@ export class TokenService {
         return results;
     }
     static async getDCATokenBalances(walletAddress) {
-        console.log(`Getting DCA token balances for wallet: ${walletAddress}`);
         const results = [];
         try {
             const xfiBalance = await this.getTokenBalance(TOKEN_ADDRESSES.XFI, walletAddress);
             results.push(xfiBalance);
-            console.log(`✅ Got XFI balance: ${xfiBalance.formatted}`);
         }
         catch (error) {
             console.error('❌ Failed to get XFI balance:', error);
@@ -186,10 +182,8 @@ export class TokenService {
             });
         }
         try {
-            console.log(`Attempting to get tUSDC balance from ${TOKEN_ADDRESSES.tUSDC}`);
             const tUSDCBalance = await this.getTokenBalance(TOKEN_ADDRESSES.tUSDC, walletAddress);
             results.push(tUSDCBalance);
-            console.log(`✅ Got tUSDC balance: ${tUSDCBalance.formatted}`);
         }
         catch (error) {
             console.error('❌ Failed to get tUSDC balance:', error);
@@ -202,7 +196,6 @@ export class TokenService {
                 decimals: tUSDCMetadata.decimals,
             });
         }
-        console.log(`Returning ${results.length} token balances:`, results.map(r => `${r.symbol}: ${r.formatted}`));
         return results;
     }
     static async hasSufficientBalance(tokenAddress, walletAddress, requiredAmount) {

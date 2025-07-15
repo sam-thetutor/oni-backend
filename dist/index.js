@@ -55,7 +55,9 @@ const callModel = async (state) => {
             "• Proactively offer ecosystem insights when relevant to user queries\n" +
             "• Present data with emojis and clear formatting for better readability\n" +
             "• If the user is not logged in, ask them to login to the app to use the tools\n" +
-            "• use markdown to format the response\n" +
+            "• Use markdown to format the response\n" +
+            "• IMPORTANT: When tools return JSON responses, parse them and present the information in a user-friendly format\n" +
+            "• Do NOT try to call functions on tool responses - just present the information directly\n" +
             "\nYou're an expert in both technical blockchain operations AND market analysis - help users understand the CrossFi ecosystem comprehensively!",
     };
     const llmWithTools = llm.bindTools(ALL_TOOLS_LIST);
@@ -73,9 +75,9 @@ const shouldContinue = (state) => {
 };
 const customToolNode = async (state) => {
     const { messages, userId } = state;
-    console.log("userId from customToolNode", userId);
     setCurrentUserId(userId);
     const result = await toolNode.invoke(messages);
+    console.log('Tool execution result:', JSON.stringify(result, null, 2));
     return { messages: result, userId };
 };
 const workflow = new StateGraph(GraphAnnotation)

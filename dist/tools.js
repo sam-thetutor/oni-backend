@@ -14,7 +14,6 @@ import { XFIPriceChartTool, XFIMarketDataTool, XFITradingSignalsTool, XFIPricePr
 import { createDCAOrder, getUserDCAOrders, cancelDCAOrder, getDCAOrderStatus, getSwapQuote, getDCASystemStatus, getUserTokenBalances } from './tools/dca.js';
 let currentUserId = null;
 export const setCurrentUserId = (userId) => {
-    console.log('Setting currentUserId to:', userId);
     currentUserId = userId;
 };
 class GetWalletInfoTool extends StructuredTool {
@@ -24,16 +23,13 @@ class GetWalletInfoTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const walletAddress = currentUserId;
-            console.log('Current wallet address:', currentUserId);
             if (!walletAddress) {
                 return JSON.stringify({
                     success: false,
                     error: 'Wallet address not found. Please try again.'
                 });
             }
-            console.log('Getting wallet info for address:', walletAddress);
             const user = await WalletService.getWalletByAddress(walletAddress);
-            console.log('User found:', !!user);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -69,7 +65,6 @@ class GetWalletForOperationsTool extends StructuredTool {
                     error: 'Wallet address not found. Please try again.'
                 });
             }
-            console.log('Getting wallet for operations:', walletAddress);
             const user = await WalletService.getWalletByAddress(walletAddress);
             if (!user) {
                 return JSON.stringify({
@@ -107,8 +102,6 @@ class GetBalanceTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const walletAddress = currentUserId;
-            console.log('GetBalanceTool - Current wallet address:', currentUserId);
-            console.log('GetBalanceTool - walletAddress variable:', walletAddress);
             if (!walletAddress) {
                 return JSON.stringify({
                     success: false,
@@ -171,7 +164,7 @@ class SendTransactionTool extends StructuredTool {
                 });
             }
             const transaction = await BlockchainService.sendTransaction(user, to, amount, data);
-            return JSON.stringify({
+            const response = {
                 success: true,
                 transactionHash: transaction.hash,
                 from: transaction.from,
@@ -179,11 +172,13 @@ class SendTransactionTool extends StructuredTool {
                 value: transaction.value,
                 status: transaction.status,
                 reward: transaction.reward,
-                transactionUrl: transaction.transactionUrl || null,
-                transactionExplorerLink: transaction.transactionUrl
-                    ? `<a href="${transaction.transactionUrl}" target="_blank" rel="noopener noreferrer">view on explorer</a>`
-                    : null
-            });
+                explorerUrl: transaction.transactionUrl || null,
+                message: 'Transaction sent successfully'
+            };
+            if ('points' in transaction) {
+                response.points = transaction.points;
+            }
+            return JSON.stringify(response);
         }
         catch (error) {
             console.error('Error in send_transaction:', error);
@@ -457,7 +452,6 @@ class CreatePaymentLinksTool extends StructuredTool {
             }
             const isGlobal = !amount || amount.trim() === '';
             if (isGlobal) {
-                console.log('Creating global payment link (no amount specified)');
                 const transactionHash = await PaymentLinkService.createGlobalPaymentLinkOnChain(walletForOps.privateKey, paymentLinkID);
                 const paymentLink = await PaymentLinkService.createGlobalPaymentLink(user.privyId, paymentLinkID);
                 return JSON.stringify({
@@ -474,7 +468,6 @@ class CreatePaymentLinksTool extends StructuredTool {
                 });
             }
             else {
-                console.log(`Creating fixed payment link with amount: ${amount} XFI`);
                 const transactionHash = await PaymentLinkService.createPaymentLinkOnChain(walletForOps.privateKey, paymentLinkID, amount);
                 const paymentLink = await PaymentLinkService.createPaymentLink(user.privyId, Number(amount), paymentLinkID);
                 return JSON.stringify({
@@ -584,7 +577,6 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { linkId, amount } = input;
-            console.log(`Tool called: contribute to global payment link ${linkId} with amount ${amount} XFI`);
             const walletAddress = currentUserId;
             if (!walletAddress) {
                 return JSON.stringify({
@@ -607,7 +599,6 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
                     error: `Global payment link '${linkId}' does not exist. Please verify the link ID.`
                 });
             }
-            console.log('Global payment link found:', linkStatus.data);
             const walletForOps = await WalletService.getWalletForOperations(user.privyId);
             if (!walletForOps) {
                 return JSON.stringify({
@@ -628,9 +619,8 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
                     linkCreator: linkStatus.data.creator,
                     previousTotal: linkStatus.data.totalContributionsInXFI,
                     newEstimatedTotal: linkStatus.data.totalContributionsInXFI + Number(amount),
-                    message: `Successfully contributed ${amount} XFI to global payment link ${linkId}`,
-                    transactionUrl: `https://test.xfiscan.com/tx/${result.data.transactionHash}`,
-                    explorerLink: `<a href="https://test.xfiscan.com/tx/${result.data.transactionHash}" target="_blank" rel="noopener noreferrer">View on Explorer</a>`
+                    explorerUrl: `https://test.xfiscan.com/tx/${result.data.transactionHash}`,
+                    message: `Successfully contributed ${amount} XFI to global payment link ${linkId}`
                 });
             }
             else {
@@ -659,30 +649,24 @@ class CheckPaymentLinkStatusTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { linkId, type } = input;
-            console.log(`Tool called with linkId: ${linkId}, type: ${type || 'not specified (will auto-detect)'}`);
             const contractReadService = new ContractReadService();
             let result;
             let detectedType = type;
             const firstType = type || "fixed";
             const secondType = firstType === "fixed" ? "global" : "fixed";
-            console.log(`Trying ${firstType} payment link first...`);
             if (firstType === "global") {
-                console.log('Checking global payment link status...', linkId, type);
                 result = await contractReadService.checkGlobalPaymentLinkStatus(linkId);
             }
             else {
                 result = await contractReadService.checkPaymentLinkStatus(linkId);
             }
-            console.log(`${firstType} result:`, result.success ? 'SUCCESS' : `FAILED - ${result.error}`);
             if (!result.success) {
-                console.log(`Trying ${secondType} payment link...`);
                 if (secondType === "global") {
                     result = await contractReadService.checkGlobalPaymentLinkStatus(linkId);
                 }
                 else {
                     result = await contractReadService.checkPaymentLinkStatus(linkId);
                 }
-                console.log(`${secondType} result:`, result.success ? 'SUCCESS' : `FAILED - ${result.error}`);
                 if (result.success) {
                     detectedType = secondType;
                     if (result.data) {
@@ -727,10 +711,10 @@ class CreateDCAOrderTool extends StructuredTool {
     name = "create_dca_order";
     description = "Creates an automated DCA (Dollar Cost Averaging) order to buy or sell XFI when the price reaches a trigger condition. Users can say things like 'buy 10 tUSDC when XFI hits $0.05' or 'sell 5 XFI if price drops below $0.04'";
     schema = z.object({
-        orderType: z.enum(["buy", "sell"]).describe("'buy' to buy XFI with tUSDC, 'sell' to sell XFI for tUSDC"),
-        amount: z.string().describe("Amount to swap (e.g., '10' for 10 tokens)"),
-        triggerPrice: z.number().describe("Price trigger in USD (e.g., 0.05 for $0.05)"),
-        triggerCondition: z.enum(["above", "below"]).describe("Execute when price goes 'above' or 'below' trigger"),
+        orderType: z.enum(["buy", "sell"]).describe("Order type: 'buy' or 'sell'"),
+        amount: z.string().describe("Amount to buy or sell"),
+        triggerPrice: z.number().describe("Trigger price for the order"),
+        triggerCondition: z.enum(["above", "below"]).describe("Trigger condition: 'above' or 'below'"),
         slippage: z.number().optional().describe("Maximum slippage percentage (default: 5%)"),
         expirationDays: z.number().optional().describe("Order expiration in days (default: 30)")
     });
@@ -738,23 +722,27 @@ class CreateDCAOrderTool extends StructuredTool {
         try {
             const userId = currentUserId;
             if (!userId) {
-                return JSON.stringify({
-                    success: false,
-                    error: 'User not authenticated. Please try again.'
-                });
+                return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
             }
-            const result = await createDCAOrder({
+            const { orderType, amount, triggerPrice, triggerCondition, slippage, expirationDays } = input;
+            if (!orderType || !amount || triggerPrice === undefined || !triggerCondition) {
+                return JSON.stringify({ success: false, error: 'Missing required DCA order fields.' });
+            }
+            const params = {
                 userId,
-                ...input
-            });
+                orderType,
+                amount,
+                triggerPrice,
+                triggerCondition,
+                slippage,
+                expirationDays
+            };
+            const result = await createDCAOrder(params);
             return JSON.stringify(result);
         }
         catch (error) {
             console.error('Error in create_dca_order:', error);
-            return JSON.stringify({
-                success: false,
-                error: error.message
-            });
+            return JSON.stringify({ success: false, error: error.message });
         }
     }
 }
@@ -799,23 +787,19 @@ class CancelDCAOrderTool extends StructuredTool {
         try {
             const userId = currentUserId;
             if (!userId) {
-                return JSON.stringify({
-                    success: false,
-                    error: 'User not authenticated. Please try again.'
-                });
+                return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
             }
-            const result = await cancelDCAOrder({
-                userId,
-                ...input
-            });
+            const { orderId } = input;
+            if (!orderId) {
+                return JSON.stringify({ success: false, error: 'Missing required orderId.' });
+            }
+            const params = { userId, orderId };
+            const result = await cancelDCAOrder(params);
             return JSON.stringify(result);
         }
         catch (error) {
             console.error('Error in cancel_dca_order:', error);
-            return JSON.stringify({
-                success: false,
-                error: error.message
-            });
+            return JSON.stringify({ success: false, error: error.message });
         }
     }
 }
@@ -829,23 +813,19 @@ class GetDCAOrderStatusTool extends StructuredTool {
         try {
             const userId = currentUserId;
             if (!userId) {
-                return JSON.stringify({
-                    success: false,
-                    error: 'User not authenticated. Please try again.'
-                });
+                return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
             }
-            const result = await getDCAOrderStatus({
-                userId,
-                ...input
-            });
+            const { orderId } = input;
+            if (!orderId) {
+                return JSON.stringify({ success: false, error: 'Missing required orderId.' });
+            }
+            const params = { userId, orderId };
+            const result = await getDCAOrderStatus(params);
             return JSON.stringify(result);
         }
         catch (error) {
             console.error('Error in get_dca_order_status:', error);
-            return JSON.stringify({
-                success: false,
-                error: error.message
-            });
+            return JSON.stringify({ success: false, error: error.message });
         }
     }
 }
@@ -860,15 +840,24 @@ class GetSwapQuoteTool extends StructuredTool {
     });
     async _call(input, runManager) {
         try {
-            const result = await getSwapQuote(input);
+            const { fromToken, toToken, amount, slippage } = input;
+            if (!fromToken || !toToken || !amount) {
+                return JSON.stringify({ success: false, error: 'Missing required swap quote fields.' });
+            }
+            const params = {
+                fromToken,
+                toToken,
+                amount
+            };
+            if (slippage !== undefined) {
+                params.slippage = slippage;
+            }
+            const result = await getSwapQuote(params);
             return JSON.stringify(result);
         }
         catch (error) {
             console.error('Error in get_swap_quote:', error);
-            return JSON.stringify({
-                success: false,
-                error: error.message
-            });
+            return JSON.stringify({ success: false, error: error.message });
         }
     }
 }

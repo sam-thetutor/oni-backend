@@ -51,7 +51,6 @@ export class GamificationService {
             const reward = this.calculateTransactionReward(user, amount, isFirstTransaction);
             await user.addPoints(reward.totalPoints);
             await user.addVolume(parseFloat(amount));
-            console.log(`🎉 Awarded ${reward.totalPoints} points to user ${user.privyId} for ${amount} XFI transaction`);
             return reward;
         }
         catch (error) {

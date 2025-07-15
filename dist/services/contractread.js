@@ -33,7 +33,6 @@ export class ContractReadService {
     }
     async checkPaymentLinkStatus(linkId) {
         try {
-            console.log('ContractReadService: Checking payment link status for:', linkId);
             const exists = await this.publicClient.readContract({
                 address: PAYLINK_CONTRACT_ADDRESS,
                 abi: PAYLINK_ABI,
@@ -52,7 +51,6 @@ export class ContractReadService {
                 functionName: 'fixedPaymentLink',
                 args: [linkId],
             });
-            console.log('ContractReadService: Raw contract response (array format):', result);
             if (!result || !Array.isArray(result) || result.length !== 4) {
                 return {
                     success: false,
@@ -101,14 +99,12 @@ export class ContractReadService {
     }
     async checkGlobalPaymentLinkStatus(linkId) {
         try {
-            console.log('ContractReadService: Checking global payment link status for:', linkId);
             const result = await this.publicClient.readContract({
                 address: PAYLINK_CONTRACT_ADDRESS,
                 abi: PAYLINK_ABI,
                 functionName: 'globalPaymentLink',
                 args: [linkId],
             });
-            console.log('ContractReadService: Raw global payment link response (array format):', result);
             if (!result || !Array.isArray(result) || result.length !== 3) {
                 return {
                     success: false,

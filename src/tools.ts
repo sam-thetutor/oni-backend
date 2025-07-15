@@ -37,7 +37,6 @@ let currentUserId: string | null = null;
 
 // Function to set current user ID (called by the graph)
 export const setCurrentUserId = (userId: string) => {
-  console.log('Setting currentUserId to:', userId);
   currentUserId = userId;
 };
 
@@ -45,34 +44,28 @@ export const setCurrentUserId = (userId: string) => {
 class GetWalletInfoTool extends StructuredTool {
   name = "get_wallet_info";
   description = "Gets information about the user's wallet";
-  schema = z.object({}) as any;
+  schema = z.object({});
 
   async _call(input: z.infer<typeof this.schema>, runManager?: any) {
     try {
       // Get wallet address from global variable (this is our database wallet address)
       const walletAddress = currentUserId;
-
-      console.log('Current wallet address:', currentUserId);
       
       if (!walletAddress) {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
-        }) as any;
+        });
       }
-
-      console.log('Getting wallet info for address:', walletAddress);
 
       // Get user from database using frontend wallet address
       const user = await WalletService.getWalletByAddress(walletAddress);
-
-      console.log('User found:', !!user);
       
       if (!user) {
         return JSON.stringify({ 
           success: false, 
           error: 'User wallet not found in database' 
-        }) as any;
+        });
       }
 
       return JSON.stringify({
@@ -80,13 +73,13 @@ class GetWalletInfoTool extends StructuredTool {
         walletAddress: user.walletAddress,
         chainId: user.chainId,
         createdAt: user.createdAt,
-      }) as any;
+      });
     } catch (error: any) {
       console.error('Error in get_wallet_info:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -95,22 +88,19 @@ class GetWalletInfoTool extends StructuredTool {
 class GetWalletForOperationsTool extends StructuredTool {
   name = "get_wallet_for_operations";
   description = "Gets the user's wallet information for blockchain operations (includes private key)";
-  schema = z.object({}) as any;
+  schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       // Get wallet address from global variable
       const walletAddress = currentUserId;
       
-      
       if (!walletAddress) {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
-        }) as any;
+        });
       }
-
-      console.log('Getting wallet for operations:', walletAddress);
 
       // Get user from database using frontend wallet address
       const user = await WalletService.getWalletByAddress(walletAddress);
@@ -119,7 +109,7 @@ class GetWalletForOperationsTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'User wallet not found in database' 
-        }) as any;
+        });
       }
 
       // Get wallet info for operations (includes private key)
@@ -129,7 +119,7 @@ class GetWalletForOperationsTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'Failed to get wallet for operations' 
-        }) as any;
+        });
       }
 
       return JSON.stringify({
@@ -138,13 +128,13 @@ class GetWalletForOperationsTool extends StructuredTool {
         chainId: walletForOps.chainId,
         hasPrivateKey: !!walletForOps.privateKey,
         // Note: private key is encrypted in database
-      }) as any;
+      });
     } catch (error: any) {
       console.error('Error in get_wallet_for_operations:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -153,28 +143,25 @@ class GetWalletForOperationsTool extends StructuredTool {
 class GetBalanceTool extends StructuredTool {
   name = "get_balance";
   description = "Gets the balance of the user's wallet";
-  schema = z.object({}) as any;
+  schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       // Get wallet address from global variable (user's wallet address from database)
       const walletAddress = currentUserId;
       
-      console.log('GetBalanceTool - Current wallet address:', currentUserId);
-      console.log('GetBalanceTool - walletAddress variable:', walletAddress);
-      
       if (!walletAddress) {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
-        }) as any;
+        });
       }
 
       if (!BlockchainService.isValidAddress(walletAddress)) {
         return JSON.stringify({ 
           success: false, 
           error: 'Invalid wallet address format' 
-        }) as any;
+        });
       }
 
       const balance = await BlockchainService.getBalance(walletAddress);
@@ -185,13 +172,13 @@ class GetBalanceTool extends StructuredTool {
         balance: balance.balance,
         formatted: balance.formatted,
         symbol: 'XFI'
-      }) as any;
+      });
     } catch (error: any) {
       console.error('Error in get_balance:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -204,7 +191,7 @@ class SendTransactionTool extends StructuredTool {
     to: z.string().describe("The recipient wallet address"),
     amount: z.string().describe("The amount to send in XFI (e.g., '0.1')"),
     data: z.string().optional().describe("Optional transaction data (hex string)")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
@@ -215,14 +202,14 @@ class SendTransactionTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
-        }) as any;
+        });
       }
       // Validate addresses
       if (!BlockchainService.isValidAddress(to)) {
         return JSON.stringify({ 
           success: false, 
           error: 'Invalid recipient address format' 
-        }) as any;
+        });
       }
       // Get user from database
       const user = await WalletService.getWalletByAddress(walletAddress);
@@ -230,12 +217,11 @@ class SendTransactionTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'User wallet not found in database' 
-        }) as any;
+        });
       }
       // Send transaction
       const transaction = await BlockchainService.sendTransaction(user, to, amount, data);
       // Build response object
-      console.log("using the updated tools");
       const response: any = {
         success: true,
         transactionHash: transaction.hash,
@@ -250,13 +236,13 @@ class SendTransactionTool extends StructuredTool {
       if ('points' in transaction) {
         response.points = (transaction as any).points;
       }
-      return JSON.stringify(response) as any;
+      return JSON.stringify(response);
     } catch (error: any) {
       console.error('Error in send_transaction:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -267,7 +253,7 @@ class GetTransactionHistoryTool extends StructuredTool {
   description = "Gets transaction history for the user's wallet";
   schema = z.object({
     limit: z.number().optional().describe("Number of transactions to return (default: 10)")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
@@ -280,14 +266,14 @@ class GetTransactionHistoryTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
-        }) as any;
+        });
       }
 
       if (!BlockchainService.isValidAddress(walletAddress)) {
         return JSON.stringify({ 
           success: false, 
           error: 'Invalid wallet address format' 
-        }) as any;
+        });
       }
 
       const transactions = await BlockchainService.getTransactionHistory(walletAddress, limit);
@@ -302,13 +288,13 @@ class GetTransactionHistoryTool extends StructuredTool {
           value: tx.value,
           status: tx.status
         }))
-      }) as any;
+      });
     } catch (error: any) {
       console.error('Error in get_transaction_history:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -317,7 +303,7 @@ class GetTransactionHistoryTool extends StructuredTool {
 class GetUserStatsTool extends StructuredTool {
   name = "get_user_stats";
   description = "Gets the current user's gamification stats (points, rank, achievements)";
-  schema = z.object({}) as any;
+  schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
@@ -328,7 +314,7 @@ class GetUserStatsTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
-        }) as any;
+        });
       }
 
       // Get user from database
@@ -338,7 +324,7 @@ class GetUserStatsTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'User wallet not found in database' 
-        }) as any;
+        });
       }
 
       // Get user stats
@@ -348,7 +334,7 @@ class GetUserStatsTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'Failed to get user stats' 
-        }) as any;
+        });
       }
 
       // Get achievements
@@ -372,13 +358,13 @@ class GetUserStatsTool extends StructuredTool {
         achievements: userAchievements,
         totalAchievements: milestones.length,
         achievedCount: userAchievements.filter(a => a.achieved).length
-      }) as any;
+      });
     } catch (error: any) {
       console.error('Error in get_user_stats:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -389,7 +375,7 @@ class GetLeaderboardTool extends StructuredTool {
   description = "Gets the global leaderboard showing top users by points";
   schema = z.object({
     limit: z.number().optional().describe("Number of top users to return (default: 10)")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
@@ -423,13 +409,13 @@ class GetLeaderboardTool extends StructuredTool {
           percentile: userPosition.percentile
         } : null,
         totalUsers: leaderboard.length > 0 ? Math.max(...leaderboard.map(l => l.rank)) : 0
-      }) as any;
+      });
     } catch (error: any) {
       console.error('Error in get_leaderboard:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -440,39 +426,39 @@ class SetUsernameTool extends StructuredTool {
   description = "Set or update the user's public username (3-20 chars, alphanumeric or underscores, must be unique)";
   schema = z.object({
     username: z.string().min(3).max(20).regex(/^[a-zA-Z0-9_]+$/).describe("The new username to set")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       const { username } = input;
       const walletAddress = currentUserId;
       if (!walletAddress) {
-        return JSON.stringify({ success: false, error: 'Wallet address not found. Please try again.' }) as any;
+        return JSON.stringify({ success: false, error: 'Wallet address not found. Please try again.' });
       }
       const user = await WalletService.getWalletByAddress(walletAddress);
       if (!user) {
-        return JSON.stringify({ success: false, error: 'User wallet not found in database' }) as any;
+        return JSON.stringify({ success: false, error: 'User wallet not found in database' });
       }
       
       // Validate username format
       if (!username || typeof username !== 'string' || username.length < 3 || username.length > 20 || !/^[a-zA-Z0-9_]+$/.test(username)) {
-        return JSON.stringify({ success: false, error: 'Invalid username. Must be 3-20 characters, alphanumeric or underscores.' }) as any;
+        return JSON.stringify({ success: false, error: 'Invalid username. Must be 3-20 characters, alphanumeric or underscores.' });
       }
       
       // Check uniqueness
       const existing = await User.findOne({ username: username }) as any;
       if (existing && existing.privyId !== user.privyId) {
-        return JSON.stringify({ success: false, error: 'Username already taken' }) as any;
+        return JSON.stringify({ success: false, error: 'Username already taken' });
       }
       
       // Update user
       user.username = username;
       await user.save();
       
-      return JSON.stringify({ success: true, username }) as any;
+      return JSON.stringify({ success: true, username });
     } catch (error: any) {
       console.error('Error in set_username:', error);
-      return JSON.stringify({ success: false, error: error.message }) as any;
+      return JSON.stringify({ success: false, error: error.message });
     }
   }
 }
@@ -481,55 +467,47 @@ class SetUsernameTool extends StructuredTool {
 class CreateGlobalPaymentLinkTool extends StructuredTool {
   name = "create_global_payment_link";
   description = "Explicitly creates a global payment link that can accept any amount of contributions from multiple users. Note: The general create_payment_links tool automatically creates global links when no amount is specified.";
-  schema = z.object({}) as any;
+  schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       // Get wallet address from global variable
       const walletAddress = currentUserId;
-      
       if (!walletAddress) {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
-        }) as any;
+        });
       }
-
       // Get user from database
       const user = await WalletService.getWalletByAddress(walletAddress);
-      
       if (!user) {
         return JSON.stringify({ 
           success: false, 
           error: 'User wallet not found in database' 
-        }) as any;
+        });
       }
-
       // Generate a unique linkID
       const globalLinkID = nanoid(10);
-
       // Get wallet for operations (includes private key)
       const walletForOps = await WalletService.getWalletForOperations(user.privyId);
-
       if (!walletForOps) {
         return JSON.stringify({ 
           success: false, 
           error: 'Failed to get wallet for operations' 
-        }) as any;
+        });
       }
-
       // Create global payment link on blockchain
       const transactionHash = await PaymentLinkService.createGlobalPaymentLinkOnChain(
         walletForOps.privateKey, 
         globalLinkID
       );
-
       // Create global payment link in database
       const paymentLink = await PaymentLinkService.createGlobalPaymentLink(
         user.privyId, 
         globalLinkID
       );
-
+      // Return plain JSON (no markdown)
       return JSON.stringify({
         success: true,
         linkID: globalLinkID,
@@ -541,13 +519,13 @@ class CreateGlobalPaymentLinkTool extends StructuredTool {
         description: 'Global payment link allows unlimited contributions from multiple users',
         createdAt: paymentLink.createdAt,
         updatedAt: paymentLink.updatedAt
-      }) as any;
+      });
     } catch (error: any) {
       console.error('Error in create_global_payment_link:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -558,63 +536,51 @@ class CreatePaymentLinksTool extends StructuredTool {
   description = "Creates a payment link. If amount is specified, creates a fixed payment link. If no amount is specified, creates a global payment link that accepts any contributions.";
   schema = z.object({
     amount: z.string().optional().describe("Optional: The amount for a fixed payment link in XFI (e.g., '0.1'). If not provided, creates a global payment link.")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       const { amount } = input;
-      
       // Get wallet address from global variable
       const walletAddress = currentUserId;
-      
       if (!walletAddress) {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
-        }) as any;
+        });
       }
-
       // Get user from database
       const user = await WalletService.getWalletByAddress(walletAddress);
-      
       if (!user) {
         return JSON.stringify({ 
           success: false, 
           error: 'User wallet not found in database' 
-        }) as any;
+        });
       }
-
       // Generate a unique linkID
       const paymentLinkID = nanoid(10);
-
       // Get wallet for operations (includes private key)
       const walletForOps = await WalletService.getWalletForOperations(user.privyId);
-
       if (!walletForOps) {
         return JSON.stringify({ 
           success: false, 
           error: 'Failed to get wallet for operations' 
-        }) as any;
+        });
       }
-
       // Determine if this should be a global or fixed payment link
       const isGlobal = !amount || amount.trim() === '';
-      
       if (isGlobal) {
-        console.log('Creating global payment link (no amount specified)');
-        
         // Create global payment link on blockchain
         const transactionHash = await PaymentLinkService.createGlobalPaymentLinkOnChain(
           walletForOps.privateKey, 
           paymentLinkID
         );
-
         // Create global payment link in database
         const paymentLink = await PaymentLinkService.createGlobalPaymentLink(
           user.privyId, 
           paymentLinkID
         );
-
+        // Return plain JSON (no markdown)
         return JSON.stringify({
           success: true,
           linkID: paymentLinkID,
@@ -626,24 +592,21 @@ class CreatePaymentLinksTool extends StructuredTool {
           description: 'Global payment link allows unlimited contributions from multiple users',
           createdAt: paymentLink.createdAt,
           updatedAt: paymentLink.updatedAt
-        }) as any;
+        });
       } else {
-        console.log(`Creating fixed payment link with amount: ${amount} XFI`);
-        
         // Create fixed payment link on blockchain
         const transactionHash = await PaymentLinkService.createPaymentLinkOnChain(
           walletForOps.privateKey, 
           paymentLinkID, 
           amount
         );
-
         // Create fixed payment link in database
         const paymentLink = await PaymentLinkService.createPaymentLink(
           user.privyId, 
           Number(amount), 
           paymentLinkID
         );
-
+        // Return plain JSON (no markdown)
         return JSON.stringify({
           success: true,
           linkID: paymentLinkID,
@@ -656,14 +619,14 @@ class CreatePaymentLinksTool extends StructuredTool {
           description: `Fixed payment link for ${amount} XFI`,
           createdAt: paymentLink.createdAt,
           updatedAt: paymentLink.updatedAt
-        }) as any;
+        });
       }
     } catch (error: any) {
       console.error('Error in create_payment_links:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -674,7 +637,7 @@ class PayFixedPaymentLinkTool extends StructuredTool {
   description = "Pays a fixed payment link using the link ID";
   schema = z.object({
     linkId: z.string().describe("The ID of the payment link to pay")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
@@ -687,7 +650,7 @@ class PayFixedPaymentLinkTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
-        } ) as any;
+        });
       }
 
       // Get user from database
@@ -697,7 +660,7 @@ class PayFixedPaymentLinkTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'User wallet not found in database' 
-        }) as any;
+        });
       }
 
       // Get payment link details
@@ -707,14 +670,14 @@ class PayFixedPaymentLinkTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'Payment link not found' 
-        }) as any;
+        });
       }
 
       if (paymentLink.status !== 'active') {
         return JSON.stringify({ 
           success: false, 
           error: 'Payment link is no longer active' 
-        }) as any;
+        });
       }
 
       // Get wallet for operations (includes private key)
@@ -724,7 +687,7 @@ class PayFixedPaymentLinkTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'Failed to get wallet for operations' 
-        }) as any;
+        });
       }
 
       // Use blockchain service to pay the payment link
@@ -744,12 +707,12 @@ class PayFixedPaymentLinkTool extends StructuredTool {
           amount: paymentLink.amount,
           transactionHash: result.data.transactionHash,
           message: `Successfully paid ${paymentLink.amount} XFI for payment link ${linkId}`
-        }) as any;
+        });
       } else {
         return JSON.stringify({ 
           success: false, 
           error: result.error || 'Failed to process payment' 
-        }) as any;
+        });
       }
 
     } catch (error: any) {
@@ -757,7 +720,7 @@ class PayFixedPaymentLinkTool extends StructuredTool {
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -769,13 +732,13 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
   schema = z.object({
     linkId: z.string().describe("The ID of the global payment link to contribute to"),
     amount: z.string().describe("The amount to contribute in XFI (e.g., '0.1')")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       const { linkId, amount } = input;
       
-      console.log(`Tool called: contribute to global payment link ${linkId} with amount ${amount} XFI`);
+      
 
       // Get wallet address from global variable
       const walletAddress = currentUserId;
@@ -784,7 +747,7 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
-        }) as any;
+        });
       }
 
       // Get user from database
@@ -794,7 +757,7 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'User wallet not found in database' 
-        }) as any;
+        });
       }
 
       // First, check if the global payment link exists
@@ -805,10 +768,10 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: `Global payment link '${linkId}' does not exist. Please verify the link ID.` 
-        }) as any;
+        });
       }
 
-      console.log('Global payment link found:', linkStatus.data);
+      
 
       // Get wallet for operations (includes private key)
       const walletForOps = await WalletService.getWalletForOperations(user.privyId);
@@ -817,7 +780,7 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'Failed to get wallet for operations' 
-        }) as any;
+        });
       }
 
       // Use contract service to contribute to the global payment link
@@ -838,12 +801,12 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
           newEstimatedTotal: linkStatus.data.totalContributionsInXFI + Number(amount),
           explorerUrl: `https://test.xfiscan.com/tx/${result.data.transactionHash}`,
           message: `Successfully contributed ${amount} XFI to global payment link ${linkId}`
-        }) as any;
+        });
       } else {
         return JSON.stringify({ 
           success: false, 
           error: result.error || 'Failed to contribute to global payment link' 
-        }) as any;
+        });
       }
 
     } catch (error: any) {
@@ -851,7 +814,7 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
       return JSON.stringify({ 
         success: false, 
         error: error.message || 'An error occurred while contributing to the global payment link'
-      }) as any;
+      });
     }
   }
 }
@@ -863,13 +826,13 @@ class CheckPaymentLinkStatusTool extends StructuredTool {
   schema = z.object({
     linkId: z.string().describe("The ID of the payment link to check"),
     type: z.enum(["fixed", "global"]).optional().describe("Type of payment link (default: fixed - will try global as fallback)")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       const { linkId, type } = input;
       
-      console.log(`Tool called with linkId: ${linkId}, type: ${type || 'not specified (will auto-detect)'}`);
+      
 
       const contractReadService = new ContractReadService();
       
@@ -880,20 +843,20 @@ class CheckPaymentLinkStatusTool extends StructuredTool {
       const firstType = type || "fixed";
       const secondType = firstType === "fixed" ? "global" : "fixed";
 
-      console.log(`Trying ${firstType} payment link first...`);
+      
       
       if (firstType === "global") {
-        console.log('Checking global payment link status...', linkId,type);
+
         result = await contractReadService.checkGlobalPaymentLinkStatus(linkId);
       } else {
         result = await contractReadService.checkPaymentLinkStatus(linkId);
       }
 
-      console.log(`${firstType} result:`, result.success ? 'SUCCESS' : `FAILED - ${result.error}`);
+      
 
       // If first attempt fails, try the other type
       if (!result.success) {
-        console.log(`Trying ${secondType} payment link...`);
+
         
         if (secondType === "global") {
           result = await contractReadService.checkGlobalPaymentLinkStatus(linkId);
@@ -901,7 +864,7 @@ class CheckPaymentLinkStatusTool extends StructuredTool {
           result = await contractReadService.checkPaymentLinkStatus(linkId);
         }
         
-        console.log(`${secondType} result:`, result.success ? 'SUCCESS' : `FAILED - ${result.error}`);
+
         
         if (result.success) {
           detectedType = secondType;
@@ -924,13 +887,13 @@ class CheckPaymentLinkStatusTool extends StructuredTool {
           detectedType: detectedType,
           message: `${detectedType} payment link status retrieved successfully from blockchain`,
           source: 'smart_contract'
-        }) as any;
+        });
       } else {
         return JSON.stringify({
           success: false,
           error: `Payment link '${linkId}' not found as either fixed or global payment link`,
           linkId: linkId
-        } ) as any;
+        });
       }
 
     } catch (error: any) {
@@ -938,7 +901,7 @@ class CheckPaymentLinkStatusTool extends StructuredTool {
       return JSON.stringify({ 
         success: false, 
         error: error.message || 'An error occurred while checking payment link status'
-      }) as any;
+      });
     }
   }
 }
@@ -950,36 +913,39 @@ class CreateDCAOrderTool extends StructuredTool {
   name = "create_dca_order";
   description = "Creates an automated DCA (Dollar Cost Averaging) order to buy or sell XFI when the price reaches a trigger condition. Users can say things like 'buy 10 tUSDC when XFI hits $0.05' or 'sell 5 XFI if price drops below $0.04'";
   schema = z.object({
-    orderType: z.enum(["buy", "sell"]).describe("'buy' to buy XFI with tUSDC, 'sell' to sell XFI for tUSDC"),
-    amount: z.string().describe("Amount to swap (e.g., '10' for 10 tokens)"),
-    triggerPrice: z.number().describe("Price trigger in USD (e.g., 0.05 for $0.05)"),
-    triggerCondition: z.enum(["above", "below"]).describe("Execute when price goes 'above' or 'below' trigger"),
+    orderType: z.enum(["buy", "sell"]).describe("Order type: 'buy' or 'sell'"),
+    amount: z.string().describe("Amount to buy or sell"),
+    triggerPrice: z.number().describe("Trigger price for the order"),
+    triggerCondition: z.enum(["above", "below"]).describe("Trigger condition: 'above' or 'below'"),
     slippage: z.number().optional().describe("Maximum slippage percentage (default: 5%)"),
     expirationDays: z.number().optional().describe("Order expiration in days (default: 30)")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       const userId = currentUserId;
       if (!userId) {
-        return JSON.stringify({ 
-          success: false, 
-          error: 'User not authenticated. Please try again.' 
-        }) as any;
+        return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
       }
-
-      const result = await createDCAOrder({
+      // Validate required fields
+      const { orderType, amount, triggerPrice, triggerCondition, slippage, expirationDays } = input;
+      if (!orderType || !amount || triggerPrice === undefined || !triggerCondition) {
+        return JSON.stringify({ success: false, error: 'Missing required DCA order fields.' });
+      }
+      const params = {
         userId,
-        ...input
-      });
-
-      return JSON.stringify(result) as any;
+        orderType,
+        amount,
+        triggerPrice,
+        triggerCondition,
+        slippage,
+        expirationDays
+      };
+      const result = await createDCAOrder(params);
+      return JSON.stringify(result);
     } catch (error: any) {
       console.error('Error in create_dca_order:', error);
-      return JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      }) as any;
+      return JSON.stringify({ success: false, error: error.message });
     }
   }
 }
@@ -991,7 +957,7 @@ class GetUserDCAOrdersTool extends StructuredTool {
   schema = z.object({
     status: z.enum(["active", "executed", "cancelled", "failed", "expired"]).optional().describe("Filter by order status"),
     limit: z.number().optional().describe("Maximum number of orders to return (default: 10)")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
@@ -1000,7 +966,7 @@ class GetUserDCAOrdersTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'User not authenticated. Please try again.' 
-        }) as any;
+        });
       }
 
       const result = await getUserDCAOrders({
@@ -1008,13 +974,13 @@ class GetUserDCAOrdersTool extends StructuredTool {
         ...input
       });
 
-      return JSON.stringify(result) as any;
+      return JSON.stringify(result);
     } catch (error: any) {
       console.error('Error in get_user_dca_orders:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -1025,30 +991,24 @@ class CancelDCAOrderTool extends StructuredTool {
   description = "Cancels an active DCA order by order ID";
   schema = z.object({
     orderId: z.string().describe("The ID of the DCA order to cancel")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       const userId = currentUserId;
       if (!userId) {
-        return JSON.stringify({ 
-          success: false, 
-          error: 'User not authenticated. Please try again.' 
-        }) as any;
+        return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
       }
-
-      const result = await cancelDCAOrder({
-        userId,
-        ...input
-      });
-
-      return JSON.stringify(result) as any;
+      const { orderId } = input;
+      if (!orderId) {
+        return JSON.stringify({ success: false, error: 'Missing required orderId.' });
+      }
+      const params = { userId, orderId };
+      const result = await cancelDCAOrder(params);
+      return JSON.stringify(result);
     } catch (error: any) {
       console.error('Error in cancel_dca_order:', error);
-      return JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      }) as any;
+      return JSON.stringify({ success: false, error: error.message });
     }
   }
 }
@@ -1059,30 +1019,24 @@ class GetDCAOrderStatusTool extends StructuredTool {
   description = "Gets detailed status information for a specific DCA order";
   schema = z.object({
     orderId: z.string().describe("The ID of the DCA order to check")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       const userId = currentUserId;
       if (!userId) {
-        return JSON.stringify({ 
-          success: false, 
-          error: 'User not authenticated. Please try again.' 
-        }) as any;
+        return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
       }
-
-      const result = await getDCAOrderStatus({
-        userId,
-        ...input
-      });
-
-      return JSON.stringify(result) as any;
+      const { orderId } = input;
+      if (!orderId) {
+        return JSON.stringify({ success: false, error: 'Missing required orderId.' });
+      }
+      const params = { userId, orderId };
+      const result = await getDCAOrderStatus(params);
+      return JSON.stringify(result);
     } catch (error: any) {
       console.error('Error in get_dca_order_status:', error);
-      return JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      }) as any;
+      return JSON.stringify({ success: false, error: error.message });
     }
   }
 }
@@ -1096,18 +1050,27 @@ class GetSwapQuoteTool extends StructuredTool {
     toToken: z.enum(["XFI", "tUSDC"]).describe("Token to swap to"),
     amount: z.string().describe("Amount to swap"),
     slippage: z.number().optional().describe("Maximum slippage percentage (default: 5%)")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
-      const result = await getSwapQuote(input);
-      return JSON.stringify(result) as any;
+      const { fromToken, toToken, amount, slippage } = input;
+      if (!fromToken || !toToken || !amount) {
+        return JSON.stringify({ success: false, error: 'Missing required swap quote fields.' });
+      }
+      const params: { fromToken: "XFI" | "tUSDC"; toToken: "XFI" | "tUSDC"; amount: string; slippage?: number } = {
+        fromToken,
+        toToken,
+        amount
+      };
+      if (slippage !== undefined) {
+        params.slippage = slippage;
+      }
+      const result = await getSwapQuote(params);
+      return JSON.stringify(result);
     } catch (error: any) {
       console.error('Error in get_swap_quote:', error);
-      return JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      }) as any;
+      return JSON.stringify({ success: false, error: error.message });
     }
   }
 }
@@ -1116,18 +1079,18 @@ class GetSwapQuoteTool extends StructuredTool {
 class GetDCASystemStatusTool extends StructuredTool {
   name = "get_dca_system_status";
   description = "Gets the current status of the DCA monitoring and execution system";
-  schema = z.object({}) as any;
+  schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       const result = await getDCASystemStatus();
-      return JSON.stringify(result) as any;
+      return JSON.stringify(result);
     } catch (error: any) {
       console.error('Error in get_dca_system_status:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -1136,7 +1099,7 @@ class GetDCASystemStatusTool extends StructuredTool {
 class GetUserTokenBalancesTool extends StructuredTool {
   name = "get_user_token_balances";
   description = "Gets the user's current balances for DCA-supported tokens (XFI and tUSDC)";
-  schema = z.object({}) as any;
+  schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
@@ -1145,17 +1108,17 @@ class GetUserTokenBalancesTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'User not authenticated. Please try again.' 
-        }) as any;
+        });
       }
 
       const result = await getUserTokenBalances({ userId });
-      return JSON.stringify(result) as any;
+      return JSON.stringify(result);
     } catch (error: any) {
       console.error('Error in get_user_token_balances:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }
@@ -1168,7 +1131,7 @@ class AddLiquidityTool extends StructuredTool {
     xfiAmount: z.string().describe("Amount of XFI to add to the pool"),
     tUSDCAmount: z.string().describe("Amount of tUSDC to add to the pool"),
     slippage: z.number().optional().describe("Maximum slippage percentage (default: 5%)")
-  }) as any;
+  });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
@@ -1177,7 +1140,7 @@ class AddLiquidityTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'User not authenticated. Please try again.' 
-        }) as any;
+        });
       }
 
       // Get user from database
@@ -1186,7 +1149,7 @@ class AddLiquidityTool extends StructuredTool {
         return JSON.stringify({ 
           success: false, 
           error: 'User wallet not found in database' 
-        }) as any;
+        });
       }
 
       const { xfiAmount, tUSDCAmount, slippage = 5 } = input;
@@ -1207,19 +1170,19 @@ class AddLiquidityTool extends StructuredTool {
           xfiAmount,
           tUSDCAmount,
           slippage
-        }) as any;
+        });
       } else {
         return JSON.stringify({
           success: false,
           error: result.error || 'Failed to add liquidity'
-        }) as any;
+        });
       }
     } catch (error: any) {
       console.error('Error in add_liquidity:', error);
       return JSON.stringify({ 
         success: false, 
         error: error.message 
-      }) as any;
+      });
     }
   }
 }

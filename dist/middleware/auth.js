@@ -25,14 +25,6 @@ export const authenticateToken = async (req, res, next) => {
                 email: privyUser.email,
                 dbUser: dbUser,
             };
-            console.log('Authenticated user:', {
-                privyId: req.user.id,
-                privyWalletAddress: privyUser.wallet.address,
-                walletAddress: req.user.dbUser.walletAddress,
-                email: req.user.email,
-                dbUserExists: !!req.user.dbUser,
-                dbUser: req.user.dbUser,
-            });
             next();
         }
         catch (tokenError) {
