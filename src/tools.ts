@@ -209,17 +209,14 @@ class SendTransactionTool extends StructuredTool {
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       const { to, amount, data } = input;
-      
       // Get wallet address from global variable
       const walletAddress = currentUserId;
-      
       if (!walletAddress) {
         return JSON.stringify({ 
           success: false, 
           error: 'Wallet address not found. Please try again.' 
         }) as any;
       }
-
       // Validate addresses
       if (!BlockchainService.isValidAddress(to)) {
         return JSON.stringify({ 
@@ -227,21 +224,18 @@ class SendTransactionTool extends StructuredTool {
           error: 'Invalid recipient address format' 
         }) as any;
       }
-
       // Get user from database
       const user = await WalletService.getWalletByAddress(walletAddress);
-      
       if (!user) {
         return JSON.stringify({ 
           success: false, 
           error: 'User wallet not found in database' 
         }) as any;
       }
-
       // Send transaction
       const transaction = await BlockchainService.sendTransaction(user, to, amount, data);
-      
-      return JSON.stringify({
+      // Build response object
+      const response: any = {
         success: true,
         transactionHash: transaction.hash,
         from: transaction.from,
@@ -249,11 +243,13 @@ class SendTransactionTool extends StructuredTool {
         value: transaction.value,
         status: transaction.status,
         reward: transaction.reward,
-        transactionUrl: transaction.transactionUrl || null,
-        transactionExplorerLink: transaction.transactionUrl
-          ? `<a href="${transaction.transactionUrl}" target="_blank" rel="noopener noreferrer">view on explorer</a>`
-          : null
-      }) as any;
+        explorerUrl: transaction.transactionUrl || null,
+        message: 'Transaction sent successfully'
+      };
+      if ('points' in transaction) {
+        response.points = (transaction as any).points;
+      }
+      return JSON.stringify(response) as any;
     } catch (error: any) {
       console.error('Error in send_transaction:', error);
       return JSON.stringify({ 
@@ -839,9 +835,8 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
           linkCreator: linkStatus.data.creator,
           previousTotal: linkStatus.data.totalContributionsInXFI,
           newEstimatedTotal: linkStatus.data.totalContributionsInXFI + Number(amount),
-          message: `Successfully contributed ${amount} XFI to global payment link ${linkId}`,
-          transactionUrl: `https://test.xfiscan.com/tx/${result.data.transactionHash}`,
-          explorerLink: `<a href="https://test.xfiscan.com/tx/${result.data.transactionHash}" target="_blank" rel="noopener noreferrer">View on Explorer</a>`
+          explorerUrl: `https://test.xfiscan.com/tx/${result.data.transactionHash}`,
+          message: `Successfully contributed ${amount} XFI to global payment link ${linkId}`
         }) as any;
       } else {
         return JSON.stringify({ 
