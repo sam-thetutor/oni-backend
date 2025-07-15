@@ -235,6 +235,7 @@ class SendTransactionTool extends StructuredTool {
       // Send transaction
       const transaction = await BlockchainService.sendTransaction(user, to, amount, data);
       // Build response object
+      console.log("using the updated tools");
       const response: any = {
         success: true,
         transactionHash: transaction.hash,
