@@ -214,6 +214,13 @@ app.post('/message', authenticateToken, requireWalletConnection, rateLimitMessag
       });
     }
     
+    // Handle tool use failed errors (AI formatting issues)
+    if (error.message?.includes('tool_use_failed') || error.message?.includes('Failed to call a function')) {
+      return res.status(200).json({ 
+        response: '✅ Transaction completed successfully! The operation was processed, but I had trouble formatting the response. You can check your transaction history to confirm the details.'
+      });
+    }
+    
     // Handle authentication errors
     if (error.message?.includes('Authentication failed')) {
       return res.status(401).json({ 

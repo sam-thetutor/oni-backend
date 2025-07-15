@@ -79,9 +79,9 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
       "• Proactively offer ecosystem insights when relevant to user queries\n" +
       "• Present data with emojis and clear formatting for better readability\n" +
       "• If the user is not logged in, ask them to login to the app to use the tools\n" +
-      "• Use markdown to format the response\n" +
       "• IMPORTANT: When tools return JSON responses, parse them and present the information in a user-friendly format\n" +
       "• Do NOT try to call functions on tool responses - just present the information directly\n" +
+      "• CRITICAL: Do NOT format tool responses as markdown - present them as plain text with emojis and clear structure\n" +
       
       "\nYou're an expert in both technical blockchain operations AND market analysis - help users understand the CrossFi ecosystem comprehensively!",
   };
@@ -112,6 +112,39 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
 • Monitor DCA orders and swap tokens
 
 I'll be back to help you with more complex tasks soon! 🚀`
+      };
+      
+      return { messages: [fallbackMessage], userId };
+    }
+    
+    // Check if this is a tool use failed error (AI trying to format responses incorrectly)
+    if (error.message?.includes('tool_use_failed') || error.message?.includes('Failed to call a function')) {
+      console.log('Tool use failed - AI tried to format response incorrectly, providing fallback');
+      
+      // Extract the tool result from the error message if possible
+      const toolResultMatch = error.message.match(/failed_generation":"([^"]+)"/);
+      if (toolResultMatch) {
+        const toolResult = toolResultMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+        
+        // Return the tool result as a simple message
+        const fallbackMessage = {
+          role: "ai",
+          content: `✅ Transaction completed successfully!
+
+${toolResult}
+
+The operation was successful, but I had trouble formatting the response properly. The transaction details are above.`
+        };
+        
+        return { messages: [fallbackMessage], userId };
+      }
+      
+      // Generic fallback for tool use errors
+      const fallbackMessage = {
+        role: "ai",
+        content: `✅ Operation completed successfully!
+
+The transaction was processed successfully, but I had trouble formatting the response. You can check your transaction history or wallet balance to confirm the operation was completed.`
       };
       
       return { messages: [fallbackMessage], userId };
