@@ -24,7 +24,7 @@ const PORT = process.env.PORT || 3030;
 
 // CORS configuration for production
 const corsOptions = {
-  origin: ["http://localhost:5173"],
+  origin: ["http://localhost:5173","https://oni-production.up.railway.app"],
   credentials: false,
   optionsSuccessStatus: 200
 };
