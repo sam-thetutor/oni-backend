@@ -73,7 +73,7 @@ setInterval(() => {
 
 // CORS configuration for production
 const corsOptions = {
-  origin: ["http://localhost:5173","https://oni-production.up.railway.app"],
+  origin: ["http://localhost:5173","https://oni-production.up.railway.app","https://oni-one.vercel.app/"],
   credentials: false,
   optionsSuccessStatus: 200
 };

@@ -54,7 +54,7 @@ setInterval(() => {
     }
 }, 5 * 60 * 1000);
 const corsOptions = {
-    origin: ["http://localhost:5173", "https://oni-production.up.railway.app"],
+    origin: ["http://localhost:5173", "https://oni-production.up.railway.app", "https://oni-one.vercel.app/"],
     credentials: false,
     optionsSuccessStatus: 200
 };
