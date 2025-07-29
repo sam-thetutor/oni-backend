@@ -14,11 +14,12 @@ import userPaymentLinksRoutes from "./routes/userPaymentLinks.js";
 import { priceDataRoutes } from "./routes/price-data.js";
 import dcaRoutes from "./routes/dca.js";
 import { DCAExecutorService } from "./services/dca-executor.js";
+import { CronService } from "./services/cronService.js";
 import { setUserContext } from "./middleware/setUserContext.js";
-import mongoose from "mongoose";
 import { initializeSocket, closeSocket } from "./socket/index.js";
 config();
 const app = express();
+const server = createServer(app);
 const PORT = process.env.PORT || 3030;
 const messageRateLimit = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000;
@@ -65,6 +66,7 @@ app.get('/health', (req, res) => {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development',
+        database: 'supabase',
         message: 'Backend is running successfully!'
     });
 });
@@ -85,13 +87,23 @@ app.get('/api/test/payment-links', (req, res) => {
         }
     });
 });
-app.get('/api/payment-links/health', (req, res) => {
-    res.json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-        readyState: mongoose.connection.readyState
-    });
+app.get('/api/payment-links/health', async (req, res) => {
+    try {
+        await connectDB();
+        res.json({
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            database: 'connected'
+        });
+    }
+    catch (error) {
+        res.status(503).json({
+            status: 'unhealthy',
+            timestamp: new Date().toISOString(),
+            database: 'disconnected',
+            error: error.message
+        });
+    }
 });
 app.get('/api/test/create-payment-link', async (req, res) => {
     try {
@@ -102,11 +114,14 @@ app.get('/api/test/create-payment-link', async (req, res) => {
                 error: 'PaymentLink model not available'
             });
         }
-        if (mongoose.connection.readyState !== 1) {
+        try {
+            await connectDB();
+        }
+        catch (error) {
             return res.status(503).json({
                 success: false,
                 error: 'Database not connected',
-                readyState: mongoose.connection.readyState
+                message: error.message
             });
         }
         res.json({
@@ -138,7 +153,7 @@ app.post('/message', authenticateToken, requireWalletConnection, rateLimitMessag
         const history = memoryStore.getHistory(user.id);
         const result = await graph.invoke({
             messages: history,
-            userId: user.walletAddress,
+            userId: user.id,
         });
         const aiMessage = result.messages[result.messages.length - 1];
         if (aiMessage) {
@@ -193,13 +208,11 @@ app.use('*', (req, res) => {
         message: `Route ${req.method} ${req.originalUrl} not found`
     });
 });
-
-const server = createServer(app);
 const startServer = async () => {
     try {
         try {
             await connectDB();
-            console.log('✅ Connected to MongoDB');
+            console.log('✅ Connected to Supabase');
         }
         catch (dbError) {
             console.warn('⚠️ Database connection failed (continuing without DB):', dbError);
@@ -212,17 +225,22 @@ const startServer = async () => {
         catch (dcaError) {
             console.warn('⚠️ DCA executor failed to start (continuing without DCA):', dcaError);
         }
-
-        // Initialize WebSocket server
+        try {
+            CronService.getInstance().init();
+            console.log('✅ Cron service initialized');
+        }
+        catch (cronError) {
+            console.warn('⚠️ Cron service failed to start (continuing without cron):', cronError);
+        }
         try {
             console.log('🔌 Attempting to initialize WebSocket server...');
             initializeSocket(server);
             console.log('✅ WebSocket server initialized successfully');
-        } catch (wsError) {
+        }
+        catch (wsError) {
             console.error('❌ WebSocket initialization failed:', wsError);
             console.warn('⚠️ Continuing without WebSocket support');
         }
-
         server.listen(PORT, () => {
             console.log(`🚀 Server running on port ${PORT}`);
             console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -238,12 +256,14 @@ const startServer = async () => {
 process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully');
     DCAExecutorService.stopExecutor();
+    CronService.getInstance().stop();
     closeSocket();
     process.exit(0);
 });
 process.on('SIGINT', () => {
     console.log('SIGINT received, shutting down gracefully');
     DCAExecutorService.stopExecutor();
+    CronService.getInstance().stop();
     closeSocket();
     process.exit(0);
 });

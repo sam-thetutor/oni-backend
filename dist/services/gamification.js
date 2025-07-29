@@ -51,7 +51,6 @@ export class GamificationService {
             const reward = this.calculateTransactionReward(user, amount, isFirstTransaction);
             await user.addPoints(reward.totalPoints);
             await user.addVolume(parseFloat(amount));
-            // Add weekly points and volume
             await user.addWeeklyPoints(reward.totalPoints);
             await user.addWeeklyVolume(parseFloat(amount));
             return reward;
@@ -61,87 +60,6 @@ export class GamificationService {
             throw new Error('Failed to award points');
         }
     }
-
-    /**
-     * Get weekly leaderboard
-     */
-    static async getWeeklyLeaderboard(limit = 100) {
-        try {
-            const users = await User.find({})
-                .sort({ weeklyPoints: -1, weeklyVolume: -1, createdAt: 1 })
-                .limit(limit)
-                .select('privyId walletAddress weeklyPoints weeklyVolume totalVolume createdAt username');
-
-            const leaderboard = users.map((user, index) => ({
-                rank: index + 1,
-                privyId: user.privyId,
-                walletAddress: user.walletAddress,
-                points: user.weeklyPoints,
-                totalVolume: user.weeklyVolume,
-                weeklyPoints: user.weeklyPoints,
-                weeklyVolume: user.weeklyVolume,
-                createdAt: user.createdAt,
-                username: user.username
-            }));
-
-            // Calculate weekly stats
-            const now = new Date();
-            const weekNumber = this.getWeekNumber(now);
-            const year = now.getFullYear();
-            
-            // Calculate next reset time (Sunday at 00:00 UTC)
-            const nextReset = new Date(now);
-            const daysUntilSunday = (7 - nextReset.getUTCDay()) % 7;
-            nextReset.setUTCDate(nextReset.getUTCDate() + daysUntilSunday);
-            nextReset.setUTCHours(0, 0, 0, 0);
-
-            const stats = {
-                totalParticipants: leaderboard.length,
-                totalWeeklyVolume: leaderboard.reduce((sum, entry) => sum + entry.weeklyVolume, 0),
-                resetTime: nextReset.toISOString(),
-                weekNumber,
-                year
-            };
-
-            return {
-                leaderboard,
-                stats
-            };
-        } catch (error) {
-            console.error('Error getting weekly leaderboard:', error);
-            throw new Error('Failed to get weekly leaderboard');
-        }
-    }
-
-    /**
-     * Get week number of the year
-     */
-    static getWeekNumber(date) {
-        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-        const dayNum = d.getUTCDay() || 7;
-        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-        return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-    }
-
-    /**
-     * Reset weekly stats for all users
-     */
-    static async resetWeeklyStats() {
-        try {
-            const result = await User.updateMany({}, {
-                $set: {
-                    weeklyPoints: 0,
-                    weeklyVolume: 0
-                }
-            });
-            console.log(`Reset weekly stats for ${result.modifiedCount} users`);
-        } catch (error) {
-            console.error('Error resetting weekly stats:', error);
-            throw new Error('Failed to reset weekly stats');
-        }
-    }
-
     static async getUserStats(privyId) {
         try {
             const user = await User.findOne({ privyId });
@@ -205,6 +123,89 @@ export class GamificationService {
         catch (error) {
             console.error('Error getting user leaderboard position:', error);
             throw new Error('Failed to get user position');
+        }
+    }
+    static async getWeeklyLeaderboard(limit = 100) {
+        try {
+            const now = new Date();
+            const weekStart = new Date(now);
+            const dayOfWeek = now.getDay();
+            const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+            weekStart.setDate(now.getDate() - daysToSubtract);
+            weekStart.setHours(0, 0, 0, 0);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            weekEnd.setHours(23, 59, 59, 999);
+            const weekNumber = this.getWeekNumber(now);
+            const year = now.getFullYear();
+            const users = await User.find({})
+                .sort({ points: -1, totalVolume: -1, createdAt: 1 })
+                .limit(limit)
+                .select('privyId walletAddress points totalVolume createdAt username weeklyPoints weeklyVolume');
+            const leaderboard = [];
+            let totalWeeklyVolume = 0;
+            for (const user of users) {
+                if (user.weeklyPoints === undefined || user.weeklyVolume === undefined) {
+                    user.weeklyPoints = Math.floor(user.points * 0.1);
+                    user.weeklyVolume = Math.floor(user.totalVolume * 0.1);
+                    await user.save();
+                }
+                totalWeeklyVolume += user.weeklyVolume || 0;
+                leaderboard.push({
+                    rank: leaderboard.length + 1,
+                    privyId: user.privyId,
+                    walletAddress: user.walletAddress,
+                    points: user.points,
+                    totalVolume: user.totalVolume,
+                    createdAt: user.createdAt,
+                    username: user.username,
+                    weeklyPoints: user.weeklyPoints || 0,
+                    weeklyVolume: user.weeklyVolume || 0
+                });
+            }
+            leaderboard.sort((a, b) => b.weeklyPoints - a.weeklyPoints);
+            leaderboard.forEach((entry, index) => {
+                entry.rank = index + 1;
+            });
+            const nextReset = new Date(now);
+            const daysUntilSunday = (7 - now.getUTCDay()) % 7;
+            nextReset.setUTCDate(now.getUTCDate() + daysUntilSunday);
+            nextReset.setUTCHours(0, 0, 0, 0);
+            const stats = {
+                totalParticipants: leaderboard.length,
+                totalWeeklyVolume,
+                resetTime: nextReset.toISOString(),
+                weekNumber,
+                year
+            };
+            return { leaderboard, stats };
+        }
+        catch (error) {
+            console.error('Error getting weekly leaderboard:', error);
+            throw new Error('Failed to get weekly leaderboard');
+        }
+    }
+    static getWeekNumber(date) {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    }
+    static async resetWeeklyStats() {
+        try {
+            console.log('🔄 Resetting weekly stats...');
+            await User.updateMany({}, {
+                $set: {
+                    weeklyPoints: 0,
+                    weeklyVolume: 0
+                }
+            });
+            console.log('✅ Weekly stats reset completed');
+        }
+        catch (error) {
+            console.error('❌ Error resetting weekly stats:', error);
+            throw new Error('Failed to reset weekly stats');
         }
     }
     static getAchievementMilestones() {

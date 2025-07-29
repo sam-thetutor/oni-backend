@@ -2,10 +2,20 @@ import { createPublicClient, http } from 'viem';
 import { PAYLINK_CONTRACT_ADDRESS } from '../constants/contract.js';
 import { PAYLINK_ABI } from '../constants/abi.js';
 
-// Define CrossFI testnet chain
-const crossfiTestnet = {
-  id: 4157,
-  name: 'CrossFI Testnet',
+import dotenv from 'dotenv';
+dotenv.config();
+
+
+
+
+
+// Define CrossFI chain based on environment
+const isProduction = process.env.ENVIRONMENT === 'production';
+const crossfiChain = {
+  id: isProduction 
+    ? parseInt(process.env.CHAIN_ID || '4158')
+    : parseInt(process.env.CHAIN_ID_TESTNET || '4157'),
+  name: isProduction ? 'CrossFI Mainnet' : 'CrossFI Testnet',
   nativeCurrency: {
     decimals: 18,
     name: 'XFI',
@@ -13,11 +23,19 @@ const crossfiTestnet = {
   },
   rpcUrls: {
     default: {
-      http: ['https://rpc.testnet.ms'],
+      http: [isProduction 
+        ? (process.env.RPC_URL || 'https://rpc.crossfi.org')
+        : (process.env.RPC_URL_TESTNET || 'https://rpc.testnet.ms')
+      ],
     },
   },
   blockExplorers: {
-    default: { name: 'Explorer', url: 'https://test.xfiscan.com' },
+    default: { 
+      name: 'Explorer', 
+      url: isProduction 
+        ? (process.env.EXPLORER_URL || 'https://xfiscan.com')
+        : (process.env.EXPLORER_URL_TESTNET || 'https://test.xfiscan.com')
+    },
   },
 };
 
@@ -33,7 +51,7 @@ export class ContractReadService {
 
   constructor() {
     this.publicClient = createPublicClient({
-      chain: crossfiTestnet,
+      chain: crossfiChain,
       transport: http()
     });
   }

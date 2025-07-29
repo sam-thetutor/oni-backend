@@ -1,6 +1,11 @@
+import { config } from 'dotenv';
+config();
+const isProduction = process.env.ENVIRONMENT === 'production';
 export const TOKEN_ADDRESSES = {
     XFI: '0x0000000000000000000000000000000000000000',
-    tUSDC: '0xc5C6691c4A6264eF595F1fdEBc7AC077bdD1Ee50',
+    tUSDC: isProduction
+        ? '0x0000000000000000000000000000000000000000'
+        : '0xc5C6691c4A6264eF595F1fdEBc7AC077bdD1Ee50',
 };
 export const TOKEN_METADATA = {
     XFI: {
@@ -12,7 +17,7 @@ export const TOKEN_METADATA = {
     },
     tUSDC: {
         symbol: 'tUSDC',
-        name: 'Test USD Coin',
+        name: isProduction ? 'USD Coin' : 'Test USD Coin',
         decimals: 18,
         isNative: false,
         address: TOKEN_ADDRESSES.tUSDC,

@@ -7,7 +7,11 @@ export class ContractService {
     provider;
     wallet;
     constructor(privateKey) {
-        this.provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+        const isProduction = process.env.ENVIRONMENT === 'production';
+        const RPC_URL = isProduction
+            ? (process.env.RPC_URL || 'https://rpc.crossfi.org')
+            : (process.env.RPC_URL_TESTNET || 'https://rpc.testnet.ms');
+        this.provider = new ethers.JsonRpcProvider(RPC_URL);
         this.wallet = new ethers.Wallet(privateKey, this.provider);
     }
     async createGlobalPaymentLink(linkID) {

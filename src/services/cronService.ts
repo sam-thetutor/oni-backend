@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import * as cron from 'node-cron';
 import { GamificationService } from './gamification.js';
 
 export class CronService {
@@ -39,8 +39,7 @@ export class CronService {
         console.error('❌ Weekly reset failed:', error);
       }
     }, {
-      timezone: 'UTC',
-      scheduled: true
+      timezone: 'UTC'
     });
 
     this.jobs.set('weeklyReset', job);

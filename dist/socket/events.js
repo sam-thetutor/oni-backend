@@ -2,22 +2,14 @@ import { BlockchainService } from '../services/blockchain.js';
 import { GamificationService } from '../services/gamification.js';
 export const setupSocketEvents = (io) => {
     io.on('connection', (socket) => {
-        // Get wallet address from query parameters
-        const walletAddress = socket.handshake.query.walletAddress;
-        if (walletAddress) {
-            socket.walletAddress = walletAddress;
-            console.log(`🔌 Client connected with wallet: ${walletAddress}`);
-            // Join user to their wallet-specific room
-            socket.join(walletAddress);
-            console.log(`👥 User joined room: ${walletAddress}`);
-        } else {
-            console.log('🔌 Client connected (no wallet address)');
+        console.log(`🔌 Client connected: ${socket.walletAddress}`);
+        if (socket.walletAddress) {
+            socket.join(socket.walletAddress);
+            console.log(`👥 User joined room: ${socket.walletAddress}`);
         }
-        // Handle disconnect
         socket.on('disconnect', () => {
             console.log(`🔌 Client disconnected: ${socket.walletAddress}`);
         });
-        // Handle balance refresh request
         socket.on('wallet:refresh:balance', async () => {
             try {
                 if (!socket.walletAddress) {
@@ -38,7 +30,6 @@ export const setupSocketEvents = (io) => {
                 socket.emit('error', { message: 'Failed to refresh balance' });
             }
         });
-        // Handle transaction history refresh request
         socket.on('wallet:refresh:transactions', async () => {
             try {
                 if (!socket.walletAddress) {
@@ -56,7 +47,6 @@ export const setupSocketEvents = (io) => {
                 socket.emit('error', { message: 'Failed to refresh transactions' });
             }
         });
-        // Handle user stats refresh request
         socket.on('wallet:refresh:stats', async () => {
             try {
                 if (!socket.userId) {
@@ -76,7 +66,6 @@ export const setupSocketEvents = (io) => {
         });
     });
 };
-// Utility function to emit events to specific wallet
 export const emitToWallet = (io, walletAddress, event, data) => {
     io.to(walletAddress).emit(event, {
         ...data,
@@ -84,7 +73,6 @@ export const emitToWallet = (io, walletAddress, event, data) => {
     });
     console.log(`📡 Emitted ${event} to ${walletAddress}`);
 };
-// Specific event emitters
 export const emitBalanceUpdate = (io, walletAddress, balanceData) => {
     emitToWallet(io, walletAddress, 'wallet:balance:updated', balanceData);
 };
@@ -100,3 +88,4 @@ export const emitTransactionSuccess = (io, walletAddress, transactionData) => {
 export const emitTransactionError = (io, walletAddress, errorData) => {
     emitToWallet(io, walletAddress, 'wallet:transaction:error', errorData);
 };
+//# sourceMappingURL=events.js.map

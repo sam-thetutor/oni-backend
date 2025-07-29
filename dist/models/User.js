@@ -1,5 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
+import { config } from 'dotenv';
 import { EncryptionService } from '../utils/encryption.js';
+config();
 const UserSchema = new Schema({
     privyId: {
         type: String,
@@ -34,11 +36,6 @@ const UserSchema = new Schema({
         sparse: true,
         index: true,
     },
-    chainId: {
-        type: Number,
-        required: true,
-        default: 1,
-    },
     points: {
         type: Number,
         required: true,
@@ -47,6 +44,16 @@ const UserSchema = new Schema({
     totalVolume: {
         type: Number,
         required: true,
+        default: 0,
+    },
+    weeklyPoints: {
+        type: Number,
+        required: false,
+        default: 0,
+    },
+    weeklyVolume: {
+        type: Number,
+        required: false,
         default: 0,
     },
 }, {
@@ -76,6 +83,14 @@ UserSchema.methods.addPoints = async function (points) {
 };
 UserSchema.methods.addVolume = async function (amount) {
     this.totalVolume += amount;
+    await this.save();
+};
+UserSchema.methods.addWeeklyPoints = async function (points) {
+    this.weeklyPoints = (this.weeklyPoints || 0) + points;
+    await this.save();
+};
+UserSchema.methods.addWeeklyVolume = async function (amount) {
+    this.weeklyVolume = (this.weeklyVolume || 0) + amount;
     await this.save();
 };
 UserSchema.pre('save', async function (next) {

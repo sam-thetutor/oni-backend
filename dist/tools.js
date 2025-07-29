@@ -10,10 +10,13 @@ import { PaymentLinkService } from "./services/paymentlinks.js";
 import { ContractReadService } from "./services/contractread.js";
 import { CRYPTO_ASSISTANT_TOOLS } from "./tools/crypto-assistant.js";
 import { SwapService } from "./services/swap.js";
+import { getIO } from "./socket/index.js";
+import { emitBalanceUpdate, emitNewTransaction, emitPointsEarned, emitTransactionSuccess } from "./socket/events.js";
+import dotenv from 'dotenv';
+import { IntelligentTool } from "./tools/intelligentTool.js";
+dotenv.config();
 import { XFIPriceChartTool, XFIMarketDataTool, XFITradingSignalsTool, XFIPricePredictionTool, XFIMarketComparisonTool } from './tools/price-analysis.js';
 import { createDCAOrder, getUserDCAOrders, cancelDCAOrder, getDCAOrderStatus, getSwapQuote, getDCASystemStatus, getUserTokenBalances } from './tools/dca.js';
-import { emitBalanceUpdate, emitNewTransaction, emitPointsEarned, emitTransactionSuccess } from './socket/events.js';
-import { getIO } from './socket/index.js';
 let currentUserId = null;
 export const setCurrentUserId = (userId) => {
     currentUserId = userId;
@@ -24,14 +27,14 @@ class GetWalletInfoTool extends StructuredTool {
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
-                    error: 'Wallet address not found. Please try again.'
+                    error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByAddress(walletAddress);
+            const user = await WalletService.getWalletByPrivyId(privyId);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -41,7 +44,6 @@ class GetWalletInfoTool extends StructuredTool {
             return JSON.stringify({
                 success: true,
                 walletAddress: user.walletAddress,
-                chainId: user.chainId,
                 createdAt: user.createdAt,
             });
         }
@@ -60,14 +62,14 @@ class GetWalletForOperationsTool extends StructuredTool {
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
-                    error: 'Wallet address not found. Please try again.'
+                    error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByAddress(walletAddress);
+            const user = await WalletService.getWalletByPrivyId(privyId);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -103,26 +105,44 @@ class GetBalanceTool extends StructuredTool {
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
-                    error: 'Wallet address not found. Please try again.'
+                    error: 'User ID not found. Please try again.'
                 });
             }
-            if (!BlockchainService.isValidAddress(walletAddress)) {
+            const user = await WalletService.getWalletByPrivyId(privyId);
+            if (!user) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User wallet not found in database'
+                });
+            }
+            if (!BlockchainService.isValidAddress(user.walletAddress)) {
                 return JSON.stringify({
                     success: false,
                     error: 'Invalid wallet address format'
                 });
             }
-            const balance = await BlockchainService.getBalance(walletAddress);
+            console.log(`🔍 GetBalanceTool Debug:`);
+            console.log(`  - Environment: ${process.env.ENVIRONMENT}`);
+            console.log(`  - RPC URL: ${process.env.RPC_URL}`);
+            console.log(`  - Chain ID: ${process.env.CHAIN_ID}`);
+            console.log(`  - User Address: ${user.walletAddress}`);
+            const balance = await BlockchainService.getBalance(user.walletAddress);
+            console.log(`  - Balance Result:`, balance);
             return JSON.stringify({
                 success: true,
                 address: balance.address,
                 balance: balance.balance,
                 formatted: balance.formatted,
-                symbol: 'XFI'
+                symbol: 'XFI',
+                debug: {
+                    environment: process.env.ENVIRONMENT,
+                    rpcUrl: process.env.RPC_URL,
+                    chainId: process.env.CHAIN_ID
+                }
             });
         }
         catch (error) {
@@ -145,11 +165,11 @@ class SendTransactionTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { to, amount, data } = input;
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
-                    error: 'Wallet address not found. Please try again.'
+                    error: 'User ID not found. Please try again.'
                 });
             }
             if (!BlockchainService.isValidAddress(to)) {
@@ -158,7 +178,7 @@ class SendTransactionTool extends StructuredTool {
                     error: 'Invalid recipient address format'
                 });
             }
-            const user = await WalletService.getWalletByAddress(walletAddress);
+            const user = await WalletService.getWalletByPrivyId(privyId);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -180,13 +200,9 @@ class SendTransactionTool extends StructuredTool {
             if ('points' in transaction) {
                 response.points = transaction.points;
             }
-
-            // Emit real-time events
             try {
                 const io = getIO();
-                
-                // Emit transaction success
-                emitTransactionSuccess(io, walletAddress, {
+                emitTransactionSuccess(io, user.walletAddress, {
                     transactionHash: transaction.hash,
                     from: transaction.from,
                     to: transaction.to,
@@ -194,9 +210,7 @@ class SendTransactionTool extends StructuredTool {
                     status: transaction.status,
                     explorerUrl: transaction.transactionUrl || null
                 });
-
-                // Emit new transaction
-                emitNewTransaction(io, walletAddress, {
+                emitNewTransaction(io, user.walletAddress, {
                     hash: transaction.hash,
                     from: transaction.from,
                     to: transaction.to,
@@ -204,36 +218,31 @@ class SendTransactionTool extends StructuredTool {
                     status: transaction.status,
                     timestamp: new Date().toISOString()
                 });
-
-                // Emit points earned if any
                 if (transaction.reward) {
-                    emitPointsEarned(io, walletAddress, {
+                    emitPointsEarned(io, user.walletAddress, {
                         points: transaction.reward.totalPoints,
                         reason: transaction.reward.reason,
                         transactionHash: transaction.hash
                     });
                 }
-
-                // Get and emit updated balance
                 setTimeout(async () => {
                     try {
-                        const balance = await BlockchainService.getBalance(walletAddress);
-                        emitBalanceUpdate(io, walletAddress, {
+                        const balance = await BlockchainService.getBalance(user.walletAddress);
+                        emitBalanceUpdate(io, user.walletAddress, {
                             address: balance.address,
                             balance: balance.balance,
                             formatted: balance.formatted,
                             symbol: 'XFI'
                         });
-                    } catch (balanceError) {
+                    }
+                    catch (balanceError) {
                         console.error('Error fetching updated balance:', balanceError);
                     }
-                }, 2000); // Wait 2 seconds for blockchain to update
-
-            } catch (socketError) {
-                console.error('Error emitting real-time events:', socketError);
-                // Don't fail the transaction if real-time updates fail
+                }, 1000);
             }
-
+            catch (socketError) {
+                console.error('Error emitting real-time events:', socketError);
+            }
             return JSON.stringify(response);
         }
         catch (error) {
@@ -254,23 +263,30 @@ class GetTransactionHistoryTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { limit = 10 } = input;
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
-                    error: 'Wallet address not found. Please try again.'
+                    error: 'User ID not found. Please try again.'
                 });
             }
-            if (!BlockchainService.isValidAddress(walletAddress)) {
+            const user = await WalletService.getWalletByPrivyId(privyId);
+            if (!user) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User wallet not found in database'
+                });
+            }
+            if (!BlockchainService.isValidAddress(user.walletAddress)) {
                 return JSON.stringify({
                     success: false,
                     error: 'Invalid wallet address format'
                 });
             }
-            const transactions = await BlockchainService.getTransactionHistory(walletAddress, limit);
+            const transactions = await BlockchainService.getTransactionHistory(user.walletAddress, limit);
             return JSON.stringify({
                 success: true,
-                address: walletAddress,
+                address: user.walletAddress,
                 transactions: transactions.map(tx => ({
                     hash: tx.hash,
                     from: tx.from,
@@ -295,14 +311,14 @@ class GetUserStatsTool extends StructuredTool {
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
-                    error: 'Wallet address not found. Please try again.'
+                    error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByAddress(walletAddress);
+            const user = await WalletService.getWalletByPrivyId(privyId);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -357,9 +373,9 @@ class GetLeaderboardTool extends StructuredTool {
             const { limit = 10 } = input;
             const leaderboard = await GamificationService.getLeaderboard(limit);
             let userPosition = null;
-            const walletAddress = currentUserId;
-            if (walletAddress) {
-                const user = await WalletService.getWalletByAddress(walletAddress);
+            const privyId = currentUserId;
+            if (privyId) {
+                const user = await WalletService.getWalletByPrivyId(privyId);
                 if (user) {
                     userPosition = await GamificationService.getUserLeaderboardPosition(user.privyId);
                 }
@@ -398,11 +414,11 @@ class SetUsernameTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { username } = input;
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
-                return JSON.stringify({ success: false, error: 'Wallet address not found. Please try again.' });
+            const privyId = currentUserId;
+            if (!privyId) {
+                return JSON.stringify({ success: false, error: 'User ID not found. Please try again.' });
             }
-            const user = await WalletService.getWalletByAddress(walletAddress);
+            const user = await WalletService.getWalletByPrivyId(privyId);
             if (!user) {
                 return JSON.stringify({ success: false, error: 'User wallet not found in database' });
             }
@@ -429,14 +445,14 @@ class CreateGlobalPaymentLinkTool extends StructuredTool {
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
-                    error: 'Wallet address not found. Please try again.'
+                    error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByAddress(walletAddress);
+            const user = await WalletService.getWalletByPrivyId(privyId);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -484,14 +500,14 @@ class CreatePaymentLinksTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { amount } = input;
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
-                    error: 'Wallet address not found. Please try again.'
+                    error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByAddress(walletAddress);
+            const user = await WalletService.getWalletByPrivyId(privyId);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -559,14 +575,14 @@ class PayFixedPaymentLinkTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { linkId } = input;
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
-                    error: 'Wallet address not found. Please try again.'
+                    error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByAddress(walletAddress);
+            const user = await WalletService.getWalletByPrivyId(privyId);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -599,6 +615,42 @@ class PayFixedPaymentLinkTool extends StructuredTool {
             if (result.success) {
                 paymentLink.status = 'paid';
                 await paymentLink.save();
+                try {
+                    const io = getIO();
+                    emitTransactionSuccess(io, user.walletAddress, {
+                        transactionHash: result.data.transactionHash,
+                        from: user.walletAddress,
+                        to: linkId,
+                        value: paymentLink.amount.toString(),
+                        status: 'success',
+                        explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${result.data.transactionHash}`
+                    });
+                    emitNewTransaction(io, user.walletAddress, {
+                        hash: result.data.transactionHash,
+                        from: user.walletAddress,
+                        to: linkId,
+                        value: paymentLink.amount.toString(),
+                        status: 'success',
+                        timestamp: new Date().toISOString()
+                    });
+                    setTimeout(async () => {
+                        try {
+                            const balance = await BlockchainService.getBalance(user.walletAddress);
+                            emitBalanceUpdate(io, user.walletAddress, {
+                                address: balance.address,
+                                balance: balance.balance,
+                                formatted: balance.formatted,
+                                symbol: 'XFI'
+                            });
+                        }
+                        catch (balanceError) {
+                            console.error('Error fetching updated balance:', balanceError);
+                        }
+                    }, 1000);
+                }
+                catch (socketError) {
+                    console.error('Error emitting real-time events:', socketError);
+                }
                 return JSON.stringify({
                     success: true,
                     linkId: linkId,
@@ -633,14 +685,14 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { linkId, amount } = input;
-            const walletAddress = currentUserId;
-            if (!walletAddress) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
-                    error: 'Wallet address not found. Please try again.'
+                    error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByAddress(walletAddress);
+            const user = await WalletService.getWalletByPrivyId(privyId);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -666,6 +718,42 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
             const contractService = new ContractService(walletForOps.privateKey);
             const result = await contractService.contributeToGlobalPaymentLink(linkId, amount);
             if (result.success) {
+                try {
+                    const io = getIO();
+                    emitTransactionSuccess(io, user.walletAddress, {
+                        transactionHash: result.data.transactionHash,
+                        from: user.walletAddress,
+                        to: linkId,
+                        value: amount,
+                        status: 'success',
+                        explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${result.data.transactionHash}`
+                    });
+                    emitNewTransaction(io, user.walletAddress, {
+                        hash: result.data.transactionHash,
+                        from: user.walletAddress,
+                        to: linkId,
+                        value: amount,
+                        status: 'success',
+                        timestamp: new Date().toISOString()
+                    });
+                    setTimeout(async () => {
+                        try {
+                            const balance = await BlockchainService.getBalance(user.walletAddress);
+                            emitBalanceUpdate(io, user.walletAddress, {
+                                address: balance.address,
+                                balance: balance.balance,
+                                formatted: balance.formatted,
+                                symbol: 'XFI'
+                            });
+                        }
+                        catch (balanceError) {
+                            console.error('Error fetching updated balance:', balanceError);
+                        }
+                    }, 1000);
+                }
+                catch (socketError) {
+                    console.error('Error emitting real-time events:', socketError);
+                }
                 return JSON.stringify({
                     success: true,
                     linkId: linkId,
@@ -675,7 +763,7 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
                     linkCreator: linkStatus.data.creator,
                     previousTotal: linkStatus.data.totalContributionsInXFI,
                     newEstimatedTotal: linkStatus.data.totalContributionsInXFI + Number(amount),
-                    explorerUrl: `https://test.xfiscan.com/tx/${result.data.transactionHash}`,
+                    explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${result.data.transactionHash}`,
                     message: `Successfully contributed ${amount} XFI to global payment link ${linkId}`
                 });
             }
@@ -970,14 +1058,14 @@ class AddLiquidityTool extends StructuredTool {
     });
     async _call(input, runManager) {
         try {
-            const userId = currentUserId;
-            if (!userId) {
+            const privyId = currentUserId;
+            if (!privyId) {
                 return JSON.stringify({
                     success: false,
                     error: 'User not authenticated. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByAddress(userId);
+            const user = await WalletService.getWalletByPrivyId(privyId);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -987,6 +1075,42 @@ class AddLiquidityTool extends StructuredTool {
             const { xfiAmount, tUSDCAmount, slippage = 5 } = input;
             const result = await SwapService.addLiquidity(user, xfiAmount, tUSDCAmount, slippage);
             if (result.success) {
+                try {
+                    const io = getIO();
+                    emitTransactionSuccess(io, user.walletAddress, {
+                        transactionHash: result.transactionHash,
+                        from: user.walletAddress,
+                        to: 'Liquidity Pool',
+                        value: `${xfiAmount} XFI + ${tUSDCAmount} tUSDC`,
+                        status: 'success',
+                        explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${result.transactionHash}`
+                    });
+                    emitNewTransaction(io, user.walletAddress, {
+                        hash: result.transactionHash,
+                        from: user.walletAddress,
+                        to: 'Liquidity Pool',
+                        value: `${xfiAmount} XFI + ${tUSDCAmount} tUSDC`,
+                        status: 'success',
+                        timestamp: new Date().toISOString()
+                    });
+                    setTimeout(async () => {
+                        try {
+                            const balance = await BlockchainService.getBalance(user.walletAddress);
+                            emitBalanceUpdate(io, user.walletAddress, {
+                                address: balance.address,
+                                balance: balance.balance,
+                                formatted: balance.formatted,
+                                symbol: 'XFI'
+                            });
+                        }
+                        catch (balanceError) {
+                            console.error('Error fetching updated balance:', balanceError);
+                        }
+                    }, 1000);
+                }
+                catch (socketError) {
+                    console.error('Error emitting real-time events:', socketError);
+                }
                 return JSON.stringify({
                     success: true,
                     message: `✅ Successfully added ${xfiAmount} XFI + ${tUSDCAmount} tUSDC to the liquidity pool!`,
@@ -1040,5 +1164,10 @@ export const ALL_TOOLS_LIST = [
     new GetDCASystemStatusTool(),
     new GetUserTokenBalancesTool(),
     new AddLiquidityTool(),
+];
+const intelligentTool = new IntelligentTool(ALL_TOOLS_LIST);
+export const ALL_TOOLS_LIST_WITH_INTELLIGENT = [
+    intelligentTool,
+    ...ALL_TOOLS_LIST
 ];
 //# sourceMappingURL=tools.js.map

@@ -1,5 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
-import { setupSocketEvents } from './events.js';
+import { config } from 'dotenv';
+config();
 let io = null;
 export const initializeSocket = (server) => {
     try {
@@ -13,11 +14,17 @@ export const initializeSocket = (server) => {
             transports: ['websocket', 'polling']
         });
         console.log('🔌 Socket.IO server created');
-        // Temporarily skip authentication for testing
-        // io.use(authenticateSocket);
         console.log('🔌 Authentication middleware skipped for testing');
-        // Setup proper event handlers
-        setupSocketEvents(io);
+        io.on('connection', (socket) => {
+            console.log('🔌 Client connected (no auth)');
+            socket.on('disconnect', () => {
+                console.log('🔌 Client disconnected');
+            });
+            socket.on('test', (data) => {
+                console.log('🔌 Test event received:', data);
+                socket.emit('test-response', { message: 'WebSocket is working!' });
+            });
+        });
         console.log('🔌 Basic event handlers setup complete');
         console.log('🔌 WebSocket server initialized successfully');
         return io;
@@ -40,3 +47,4 @@ export const closeSocket = () => {
         console.log('🔌 WebSocket server closed');
     }
 };
+//# sourceMappingURL=index.js.map

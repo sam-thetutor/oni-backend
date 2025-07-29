@@ -39,6 +39,30 @@ async function resetUserCollection() {
       }
     }
     
+    console.log('🗑️ Dropping existing DCAOrder collection...');
+    try {
+      await db.dropCollection('dcaorders');
+      console.log('✅ DCAOrder collection dropped successfully');
+    } catch (error: any) {
+      if (error.code === 26) {
+        console.log('ℹ️  DCAOrder collection does not exist, skipping...');
+      } else {
+        throw error;
+      }
+    }
+    
+    console.log('🗑️ Dropping existing PriceData collection...');
+    try {
+      await db.dropCollection('pricedatas');
+      console.log('✅ PriceData collection dropped successfully');
+    } catch (error: any) {
+      if (error.code === 26) {
+        console.log('ℹ️  PriceData collection does not exist, skipping...');
+      } else {
+        throw error;
+      }
+    }
+    
     console.log('🔄 Disconnecting from database...');
     await disconnectDB();
     

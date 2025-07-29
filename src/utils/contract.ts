@@ -14,7 +14,12 @@ import { ContractError, CONTRACT_ERRORS } from '../errors/contract.js';
 config();
 
 // Initialize provider
-export const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || 'https://rpc.testnet.ms');
+const isProduction = process.env.ENVIRONMENT === 'production';
+const RPC_URL = isProduction 
+  ? (process.env.RPC_URL || 'https://rpc.crossfi.org')
+  : (process.env.RPC_URL_TESTNET || 'https://rpc.testnet.ms');
+
+export const provider = new ethers.JsonRpcProvider(RPC_URL);
 
 // Function to create a wallet from private key
 export function createWalletFromPrivateKey(privateKey: string): ethers.Wallet {

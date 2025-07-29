@@ -1,7 +1,11 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
+import { config } from 'dotenv';
 import { authenticateSocket } from './auth.js';
 import { setupSocketEvents } from './events.js';
+
+// Load environment variables
+config();
 
 let io: SocketIOServer | null = null;
 

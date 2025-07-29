@@ -1,6 +1,6 @@
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { Annotation, END, START, StateGraph, MessagesAnnotation, } from "@langchain/langgraph";
-import { ALL_TOOLS_LIST, setCurrentUserId } from "./tools.js";
+import { ALL_TOOLS_LIST_WITH_INTELLIGENT, setCurrentUserId } from "./tools.js";
 import { createLLM, printCostInfo } from "./config/llm.js";
 import { config } from "dotenv";
 config();
@@ -10,12 +10,16 @@ const GraphAnnotation = Annotation.Root({
     userId: Annotation(),
 });
 const llm = createLLM();
-const toolNode = new ToolNode(ALL_TOOLS_LIST);
+const toolNode = new ToolNode(ALL_TOOLS_LIST_WITH_INTELLIGENT);
 const callModel = async (state) => {
     const { messages, userId } = state;
     const systemMessage = {
         role: "system",
         content: "You are a comprehensive AI assistant specializing in the CrossFi blockchain ecosystem. You have access to wallet operations, gamification features, and comprehensive ecosystem analytics. " +
+            "\n🤖 INTELLIGENT TOOL SELECTION:\n" +
+            "• intelligent_tool_selector - Automatically selects and executes the most appropriate tool based on user message and context\n" +
+            "• Users can ask questions in natural language and the system will automatically choose the right tool\n" +
+            "• This tool can handle requests like 'Show my balance', 'Send 10 XFI to 0x123...', 'Create a payment link for 50 XFI'\n" +
             "\n🔧 WALLET & TRANSACTION TOOLS:\n" +
             "• get_wallet_info - Gets information about the user's wallet (address, chain ID, creation date)\n" +
             "• get_wallet_for_operations - Gets wallet info for blockchain operations (includes private key access)\n" +
@@ -49,6 +53,7 @@ const callModel = async (state) => {
             "- Investment insights and risk assessment\n" +
             "\n💡 INTERACTION GUIDELINES:\n" +
             "• Be conversational and explain what you're doing\n" +
+            "• For simple requests, you can use the intelligent_tool_selector to automatically choose the right tool\n" +
             "• When users ask about CrossFi ecosystem, market trends, or network status, use the crypto assistant tools\n" +
             "• For payment links, provide clickable URLs that others can use to pay them\n" +
             "• Format transaction hashes and addresses in a user-friendly way\n" +
@@ -61,13 +66,15 @@ const callModel = async (state) => {
             "\nYou're an expert in both technical blockchain operations AND market analysis - help users understand the CrossFi ecosystem comprehensively!",
     };
     try {
-        const llmWithTools = llm.bindTools(ALL_TOOLS_LIST);
+        const llmWithTools = llm.bindTools(ALL_TOOLS_LIST_WITH_INTELLIGENT);
         const result = await llmWithTools.invoke([systemMessage, ...messages]);
         return { messages: result, userId };
     }
     catch (error) {
-        console.error('LLM Error:', error);
-        if (error.message?.includes('Rate limit') || error.message?.includes('429') || error.message?.includes('500648')) {
+        console.error("LLM Error:", error);
+        if (error.message?.includes("Rate limit") ||
+            error.message?.includes("429") ||
+            error.message?.includes("500648")) {
             const fallbackMessage = {
                 role: "ai",
                 content: `I apologize, but I'm currently experiencing high demand and can't process your request right now. 
@@ -83,22 +90,25 @@ const callModel = async (state) => {
 • Check the leaderboard and your gamification stats
 • Monitor DCA orders and swap tokens
 
-I'll be back to help you with more complex tasks soon! 🚀`
+I'll be back to help you with more complex tasks soon! 🚀`,
             };
             return { messages: [fallbackMessage], userId };
         }
-        if (error.message?.includes('tool_use_failed') || error.message?.includes('Failed to call a function')) {
-            console.log('Tool use failed - AI tried to format response incorrectly, providing fallback');
+        if (error.message?.includes("tool_use_failed") ||
+            error.message?.includes("Failed to call a function")) {
+            console.log("Tool use failed - AI tried to format response incorrectly, providing fallback");
             const toolResultMatch = error.message.match(/failed_generation":"([^"]+)"/);
             if (toolResultMatch) {
-                const toolResult = toolResultMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                const toolResult = toolResultMatch[1]
+                    .replace(/\\n/g, "\n")
+                    .replace(/\\"/g, '"');
                 const fallbackMessage = {
                     role: "ai",
                     content: `✅ Transaction completed successfully!
 
 ${toolResult}
 
-The operation was successful, but I had trouble formatting the response properly. The transaction details are above.`
+The operation was successful, but I had trouble formatting the response properly. The transaction details are above.`,
                 };
                 return { messages: [fallbackMessage], userId };
             }
@@ -106,7 +116,7 @@ The operation was successful, but I had trouble formatting the response properly
                 role: "ai",
                 content: `✅ Operation completed successfully!
 
-The transaction was processed successfully, but I had trouble formatting the response. You can check your transaction history or wallet balance to confirm the operation was completed.`
+The transaction was processed successfully, but I had trouble formatting the response. You can check your transaction history or wallet balance to confirm the operation was completed.`,
             };
             return { messages: [fallbackMessage], userId };
         }
@@ -126,7 +136,7 @@ const customToolNode = async (state) => {
     const { messages, userId } = state;
     setCurrentUserId(userId);
     const result = await toolNode.invoke(messages);
-    console.log('Tool execution result:', JSON.stringify(result, null, 2));
+    console.log("Tool execution result:", JSON.stringify(result, null, 2));
     return { messages: result, userId };
 };
 const workflow = new StateGraph(GraphAnnotation)

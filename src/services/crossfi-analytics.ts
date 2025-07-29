@@ -1,5 +1,9 @@
+import { config } from 'dotenv';
 import { publicClient } from '../config/viem.js';
 import { formatEther } from 'viem';
+
+// Load environment variables
+config();
 
 export interface NetworkStats {
   chainId: number;
@@ -95,7 +99,11 @@ export class CrossFiAnalyticsService {
   static async getNetworkStats(): Promise<NetworkStats> {
     try {
       // Get data from CrossFi API
-      const response = await fetch('https://test.xfiscan.com/api/1.0/stat');
+      const isProduction = process.env.ENVIRONMENT === 'production';
+      const apiUrl = isProduction 
+        ? 'https://xfiscan.com/api/1.0/stat'
+        : 'https://test.xfiscan.com/api/1.0/stat';
+      const response = await fetch(apiUrl);
       const apiData: CrossFiApiResponse = await response.json();
       
       // Get additional data from our blockchain client
@@ -132,7 +140,11 @@ export class CrossFiAnalyticsService {
    */
   static async getTokenHolderMetrics(): Promise<TokenHolders> {
     try {
-      const response = await fetch('https://test.xfiscan.com/api/1.0/stat');
+      const isProduction = process.env.ENVIRONMENT === 'production';
+      const apiUrl = isProduction 
+        ? 'https://xfiscan.com/api/1.0/stat'
+        : 'https://test.xfiscan.com/api/1.0/stat';
+      const response = await fetch(apiUrl);
       const apiData: CrossFiApiResponse = await response.json();
       
       const totalAddresses = parseInt(apiData.total_addresses);
@@ -159,7 +171,11 @@ export class CrossFiAnalyticsService {
    */
   static async getValidatorMetrics(): Promise<ValidatorMetrics> {
     try {
-      const response = await fetch('https://test.xfiscan.com/api/1.0/stat');
+      const isProduction = process.env.ENVIRONMENT === 'production';
+      const apiUrl = isProduction 
+        ? 'https://xfiscan.com/api/1.0/stat'
+        : 'https://test.xfiscan.com/api/1.0/stat';
+      const response = await fetch(apiUrl);
       const apiData: CrossFiApiResponse = await response.json();
       
       const totalValidators = apiData.validators.active + apiData.validators.inactive;
@@ -184,7 +200,11 @@ export class CrossFiAnalyticsService {
    */
   static async getStakingMetrics(): Promise<StakingMetrics> {
     try {
-      const response = await fetch('https://test.xfiscan.com/api/1.0/stat');
+      const isProduction = process.env.ENVIRONMENT === 'production';
+      const apiUrl = isProduction 
+        ? 'https://xfiscan.com/api/1.0/stat'
+        : 'https://test.xfiscan.com/api/1.0/stat';
+      const response = await fetch(apiUrl);
       const apiData: CrossFiApiResponse = await response.json();
       
       // Find MPX staked amount
@@ -243,7 +263,11 @@ export class CrossFiAnalyticsService {
   static async getTransactionAnalytics(blockCount: number = 10): Promise<TransactionAnalytics> {
     try {
       // Get basic stats from API
-      const response = await fetch('https://test.xfiscan.com/api/1.0/stat');
+      const isProduction = process.env.ENVIRONMENT === 'production';
+      const apiUrl = isProduction 
+        ? 'https://xfiscan.com/api/1.0/stat'
+        : 'https://test.xfiscan.com/api/1.0/stat';
+      const response = await fetch(apiUrl);
       const apiData: CrossFiApiResponse = await response.json();
       
       // Get detailed transaction data from blockchain

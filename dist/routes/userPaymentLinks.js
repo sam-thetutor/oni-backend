@@ -3,6 +3,7 @@ import { UserPaymentLinksController } from '../controllers/userPaymentLinks.js';
 import { authenticateToken } from '../middleware/auth.js';
 const router = Router();
 const userPaymentLinksController = new UserPaymentLinksController();
+router.get('/public/:linkId', userPaymentLinksController.getPublicPaymentLink);
 router.use(authenticateToken);
 router.get('/', userPaymentLinksController.getUserPaymentLinks);
 router.get('/stats', userPaymentLinksController.getUserPaymentLinkStats);

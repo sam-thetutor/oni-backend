@@ -1,7 +1,17 @@
-export const PAYLINK_CONTRACT_ADDRESS = "0x03f0b9919B7A1341A17B15b2A2DA360d059Cc320"; // UPDATE: Replace with new XFI-compatible contract address
+import { config } from 'dotenv';
 
-// CrossFI Swap Contract - LIVE ON CROSSFI TESTNET
-export const SWAP_CONTRACT_ADDRESS = "0xFb8cc0D4E2c025A1B6429Ef942bf33D0f41fED34";
+// Load environment variables
+config();
+
+const isProduction = process.env.ENVIRONMENT === 'production';
+export const PAYLINK_CONTRACT_ADDRESS = isProduction 
+  ? "0x8Ceb24694b8d3965Bd7224652B15B2A4f65Bd130" // CrossFi Mainnet Payment Link Contract
+  : "0x03f0b9919B7A1341A17B15b2A2DA360d059Cc320"; // CrossFi Testnet Payment Link Contract
+
+// CrossFI Swap Contract - Environment aware
+export const SWAP_CONTRACT_ADDRESS = isProduction 
+  ? "0xFb8cc0D4E2c025A1B6429Ef942bf33D0f41fED34" // TODO: Update with mainnet swap contract
+  : "0xFb8cc0D4E2c025A1B6429Ef942bf33D0f41fED34"; // CrossFi Testnet Swap Contract
 
 // CrossFI Swap Contract ABI - Matches the actual deployed contract
 export const SWAP_CONTRACT_ABI = [

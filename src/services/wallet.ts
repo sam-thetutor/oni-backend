@@ -1,16 +1,24 @@
 import { ethers } from 'ethers';
 import crypto from 'crypto';
+import { config } from 'dotenv';
 import { User, IUser } from '../models/User.js';
 import { PrivyService } from './privy.js';
+
+// Load environment variables
+config();
 
 export interface WalletInfo {
   address: string;
   privateKey: string;
-  chainId: number;
 }
 
 export class WalletService {
-  private static readonly CHAIN_ID = parseInt(process.env.CHAIN_ID || '4157');
+  private static readonly CHAIN_ID = (() => {
+    const isProduction = process.env.ENVIRONMENT === 'production';
+    return isProduction 
+      ? parseInt(process.env.CHAIN_ID || '4158')
+      : parseInt(process.env.CHAIN_ID_TESTNET || '4157');
+  })();
 
   /**
    * Generate a random wallet for a user
@@ -22,7 +30,6 @@ export class WalletService {
     return {
       address: wallet.address,
       privateKey: wallet.privateKey,
-      chainId: this.CHAIN_ID,
     };
   }
 
@@ -31,10 +38,32 @@ export class WalletService {
    */
   static async getUserWallet(privyId: string, frontendWalletAddress: string, email?: string): Promise<IUser> {
     try {
-      // Check if user already exists
-      let user = await User.findOne({ frontendWalletAddress });
+      // First, check if user already exists by privyId
+      let user = await User.findOne({ privyId });
       
       if (user) {
+        // User exists, check if frontendWalletAddress needs to be updated
+        if (user.frontendWalletAddress !== frontendWalletAddress) {
+          // Update the frontend wallet address
+          user.frontendWalletAddress = frontendWalletAddress;
+          await user.save();
+        }
+        return user;
+      }
+
+      // Check if a user with this frontendWalletAddress already exists
+      user = await User.findOne({ frontendWalletAddress });
+      
+      if (user) {
+        // This shouldn't happen in normal flow, but handle it gracefully
+        // Update the privyId if it's different
+        if (user.privyId !== privyId) {
+          user.privyId = privyId;
+          if (email) {
+            user.email = email;
+          }
+          await user.save();
+        }
         return user;
       }
 
@@ -48,7 +77,6 @@ export class WalletService {
         frontendWalletAddress: frontendWalletAddress,
         walletAddress: walletInfo.address,
         encryptedPrivateKey: walletInfo.privateKey, // Will be encrypted by pre-save middleware
-        chainId: walletInfo.chainId,
       });
 
       await user.save();
@@ -116,7 +144,7 @@ export class WalletService {
       return {
         address: user.walletAddress,
         privateKey: user.encryptedPrivateKey, // This is encrypted
-        chainId: user.chainId,
+        chainId: this.CHAIN_ID, // Use environment chain ID instead of stored chainId
       };
     } catch (error) {
       console.error('❌ Error getting wallet for operations:', error);
@@ -141,7 +169,6 @@ export class WalletService {
       // Update user with new wallet
       user.walletAddress = newWalletInfo.address;
       user.encryptedPrivateKey = newWalletInfo.privateKey; // Will be encrypted by pre-save middleware
-      user.chainId = newWalletInfo.chainId;
       
       await user.save();
       

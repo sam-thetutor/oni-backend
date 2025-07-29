@@ -1,9 +1,15 @@
+import { config } from 'dotenv';
 import { publicClient } from '../config/viem.js';
 import { formatEther } from 'viem';
+config();
 export class CrossFiAnalyticsService {
     static async getNetworkStats() {
         try {
-            const response = await fetch('https://test.xfiscan.com/api/1.0/stat');
+            const isProduction = process.env.ENVIRONMENT === 'production';
+            const apiUrl = isProduction
+                ? 'https://xfiscan.com/api/1.0/stat'
+                : 'https://test.xfiscan.com/api/1.0/stat';
+            const response = await fetch(apiUrl);
             const apiData = await response.json();
             const blockNumber = await publicClient.getBlockNumber();
             const latestBlock = await publicClient.getBlock({ blockNumber });
@@ -32,7 +38,11 @@ export class CrossFiAnalyticsService {
     }
     static async getTokenHolderMetrics() {
         try {
-            const response = await fetch('https://test.xfiscan.com/api/1.0/stat');
+            const isProduction = process.env.ENVIRONMENT === 'production';
+            const apiUrl = isProduction
+                ? 'https://xfiscan.com/api/1.0/stat'
+                : 'https://test.xfiscan.com/api/1.0/stat';
+            const response = await fetch(apiUrl);
             const apiData = await response.json();
             const totalAddresses = parseInt(apiData.total_addresses);
             const xfiHolders = apiData.total_holders.xfi;
@@ -52,7 +62,11 @@ export class CrossFiAnalyticsService {
     }
     static async getValidatorMetrics() {
         try {
-            const response = await fetch('https://test.xfiscan.com/api/1.0/stat');
+            const isProduction = process.env.ENVIRONMENT === 'production';
+            const apiUrl = isProduction
+                ? 'https://xfiscan.com/api/1.0/stat'
+                : 'https://test.xfiscan.com/api/1.0/stat';
+            const response = await fetch(apiUrl);
             const apiData = await response.json();
             const totalValidators = apiData.validators.active + apiData.validators.inactive;
             const decentralizationRatio = (apiData.validators.inactive / totalValidators) * 100;
@@ -72,7 +86,11 @@ export class CrossFiAnalyticsService {
     }
     static async getStakingMetrics() {
         try {
-            const response = await fetch('https://test.xfiscan.com/api/1.0/stat');
+            const isProduction = process.env.ENVIRONMENT === 'production';
+            const apiUrl = isProduction
+                ? 'https://xfiscan.com/api/1.0/stat'
+                : 'https://test.xfiscan.com/api/1.0/stat';
+            const response = await fetch(apiUrl);
             const apiData = await response.json();
             const mpxStaked = apiData.staked_coins.find(coin => coin.denom === 'mpx');
             const totalStaked = mpxStaked ? mpxStaked.amount : '0';
@@ -112,7 +130,11 @@ export class CrossFiAnalyticsService {
     }
     static async getTransactionAnalytics(blockCount = 10) {
         try {
-            const response = await fetch('https://test.xfiscan.com/api/1.0/stat');
+            const isProduction = process.env.ENVIRONMENT === 'production';
+            const apiUrl = isProduction
+                ? 'https://xfiscan.com/api/1.0/stat'
+                : 'https://test.xfiscan.com/api/1.0/stat';
+            const response = await fetch(apiUrl);
             const apiData = await response.json();
             const latestBlockNumber = await publicClient.getBlockNumber();
             let totalTransactions = 0;

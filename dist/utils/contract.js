@@ -3,7 +3,11 @@ import { config } from 'dotenv';
 import { PAYLINK_ABI } from '../constants/abi.js';
 import { PAYLINK_CONTRACT_ADDRESS } from '../constants/contract.js';
 config();
-export const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || 'https://rpc.testnet.ms');
+const isProduction = process.env.ENVIRONMENT === 'production';
+const RPC_URL = isProduction
+    ? (process.env.RPC_URL || 'https://rpc.crossfi.org')
+    : (process.env.RPC_URL_TESTNET || 'https://rpc.testnet.ms');
+export const provider = new ethers.JsonRpcProvider(RPC_URL);
 export function createWalletFromPrivateKey(privateKey) {
     try {
         return new ethers.Wallet(privateKey, provider);

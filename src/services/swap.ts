@@ -1,4 +1,5 @@
 import { parseUnits, formatUnits, type Address } from 'viem';
+import { config } from 'dotenv';
 import { publicClient, createWalletClientFromPrivateKey, getWalletClientFromUser } from '../config/viem.js';
 import { TokenService } from './tokens.js';
 import { PriceAnalyticsService } from './price-analytics.js';
@@ -6,6 +7,9 @@ import { IUser } from '../models/User.js';
 import { TOKEN_ADDRESSES, TOKEN_METADATA, SWAP_CONFIG } from '../constants/tokens.js';
 import { ERC20_ABI } from '../constants/abi.js';
 import { SWAP_CONTRACT_ADDRESS, SWAP_CONTRACT_ABI } from '../constants/contract.js';
+
+// Load environment variables
+config();
 
 export interface SwapQuote {
   fromToken: string;
@@ -410,7 +414,7 @@ export class SwapService {
             to: 'Swap Contract',
             value: `${tUSDCAmount} tUSDC → ${quote.toAmount} XFI`,
             status: 'success',
-            explorerUrl: `https://test.xfiscan.com/tx/${swapReceipt.transactionHash}`
+            explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${swapReceipt.transactionHash}`
           });
 
           // Emit new transaction
@@ -512,7 +516,7 @@ export class SwapService {
             to: 'Swap Contract',
             value: `${xfiAmount} XFI → ${quote.toAmount} tUSDC`,
             status: 'success',
-            explorerUrl: `https://test.xfiscan.com/tx/${swapReceipt.transactionHash}`
+            explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${swapReceipt.transactionHash}`
           });
 
           // Emit new transaction
@@ -714,7 +718,7 @@ export class SwapService {
             to: 'Liquidity Pool',
             value: `${xfiAmount} XFI + ${tUSDCAmount} tUSDC`,
             status: 'success',
-            explorerUrl: `https://test.xfiscan.com/tx/${liquidityReceipt.transactionHash}`
+            explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${liquidityReceipt.transactionHash}`
           });
 
           // Emit new transaction

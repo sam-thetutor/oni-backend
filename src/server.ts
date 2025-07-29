@@ -18,7 +18,6 @@ import { DCAExecutorService } from "./services/dca-executor.js";
 import { CronService } from "./services/cronService.js";
 import { setCurrentUserId } from "./tools.js";
 import {setUserContext} from "./middleware/setUserContext.js"
-import mongoose from "mongoose";
 import { initializeSocket, closeSocket } from "./socket/index.js";
 
 config();
@@ -89,6 +88,7 @@ app.get('/health', (req, res) => {
     status: 'healthy', 
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
+    database: 'supabase',
     message: 'Backend is running successfully!'
   });
 });
@@ -115,13 +115,22 @@ app.get('/api/test/payment-links', (req, res) => {
 }); 
 
 // Payment links health check (no auth required)
-app.get('/api/payment-links/health', (req, res) => {
-  res.json({ 
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    readyState: mongoose.connection.readyState
-  });
+app.get('/api/payment-links/health', async (req, res) => {
+  try {
+    await connectDB();
+    res.json({ 
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      database: 'connected'
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error.message
+    });
+  }
 }); 
 
 // Test payment link creation (no auth required - for debugging)
@@ -138,11 +147,13 @@ app.get('/api/test/create-payment-link', async (req, res) => {
     }
     
     // Test database connection
-    if (mongoose.connection.readyState !== 1) {
+    try {
+      await connectDB();
+    } catch (error) {
       return res.status(503).json({ 
         success: false,
         error: 'Database not connected',
-        readyState: mongoose.connection.readyState
+        message: error.message
       });
     }
     
@@ -184,7 +195,7 @@ app.post('/message', authenticateToken, requireWalletConnection, rateLimitMessag
     // Run the graph with user ID in state
     const result = await graph.invoke({
       messages: history,
-      userId: user.walletAddress, // Pass user ID to graph state
+      userId: user.id, // Pass privyId to graph state (not walletAddress)
     });
 
     // Add AI response to memory
@@ -264,7 +275,7 @@ const startServer = async () => {
     // Try to connect to database (but don't fail if it's not available)
     try {
       await connectDB();
-      console.log('✅ Connected to MongoDB');
+      console.log('✅ Connected to Supabase');
     } catch (dbError) {
       console.warn('⚠️ Database connection failed (continuing without DB):', dbError);
       // Don't exit the process, just continue without database

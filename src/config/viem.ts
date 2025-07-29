@@ -1,10 +1,19 @@
 import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient, defineChain } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { config } from 'dotenv';
 import { EncryptionService } from '../utils/encryption.js';
 
+// Load environment variables
+config();
+
 // Environment variables
-const RPC_URL = process.env.RPC_URL || 'https://rpc.testnet.ms';
-const CHAIN_ID = parseInt(process.env.CHAIN_ID || '4157');
+const isProduction = process.env.ENVIRONMENT === 'production';
+const RPC_URL = isProduction 
+  ? (process.env.RPC_URL || 'https://rpc.mainnet.ms')
+  : (process.env.RPC_URL_TESTNET || 'https://rpc.testnet.ms');
+const CHAIN_ID = isProduction 
+  ? parseInt(process.env.CHAIN_ID || '4158')
+  : parseInt(process.env.CHAIN_ID_TESTNET || '4157');
 
 // Define CrossFi chain
 const crossfi = defineChain({
@@ -26,8 +35,8 @@ const crossfi = defineChain({
   },
   blockExplorers: {
     default: {
-      name: 'CrossFi Explorer',
-      url: 'https://test.xfiscan.com',
+      name: isProduction ? 'CrossFi Explorer' : 'CrossFi Testnet Explorer',
+      url: isProduction ? 'https://xfiscan.com' : 'https://test.xfiscan.com',
     },
   },
 });

@@ -1,9 +1,16 @@
 import { parseEther, formatEther, type Address, type Hex } from 'viem';
+import { config } from 'dotenv';
 import { publicClient, createWalletClientFromPrivateKey, getWalletClientFromUser } from '../config/viem.js';
 import { IUser } from '../models/User.js';
 import { GamificationService } from './gamification.js';
 
-const EXPLORER_BASE_URL = 'https://test.xfiscan.com/tx/';
+// Load environment variables
+config();
+
+const isProduction = process.env.ENVIRONMENT === 'production';
+const EXPLORER_BASE_URL = isProduction 
+  ? 'https://xfiscan.com/tx/'
+  : 'https://test.xfiscan.com/tx/';
 
 export interface BalanceInfo {
   address: string;
@@ -32,7 +39,16 @@ export class BlockchainService {
    */
   static async getBalance(address: string): Promise<BalanceInfo> {
     try {
+      console.log(`🔍 BlockchainService.getBalance Debug:`);
+      console.log(`  - Address: ${address}`);
+      console.log(`  - Environment: ${process.env.ENVIRONMENT}`);
+      console.log(`  - RPC URL: ${process.env.RPC_URL}`);
+      console.log(`  - Chain ID: ${process.env.CHAIN_ID}`);
+      
       const balance = await publicClient.getBalance({ address: address as Address });
+      
+      console.log(`  - Raw Balance: ${balance}`);
+      console.log(`  - Formatted Balance: ${formatEther(balance)}`);
       
       return {
         address,

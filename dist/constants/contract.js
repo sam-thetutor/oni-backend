@@ -1,5 +1,12 @@
-export const PAYLINK_CONTRACT_ADDRESS = "0x03f0b9919B7A1341A17B15b2A2DA360d059Cc320";
-export const SWAP_CONTRACT_ADDRESS = "0xFb8cc0D4E2c025A1B6429Ef942bf33D0f41fED34";
+import { config } from 'dotenv';
+config();
+const isProduction = process.env.ENVIRONMENT === 'production';
+export const PAYLINK_CONTRACT_ADDRESS = isProduction
+    ? "0x8Ceb24694b8d3965Bd7224652B15B2A4f65Bd130"
+    : "0x03f0b9919B7A1341A17B15b2A2DA360d059Cc320";
+export const SWAP_CONTRACT_ADDRESS = isProduction
+    ? "0xFb8cc0D4E2c025A1B6429Ef942bf33D0f41fED34"
+    : "0xFb8cc0D4E2c025A1B6429Ef942bf33D0f41fED34";
 export const SWAP_CONTRACT_ABI = [
     {
         "inputs": [{ "internalType": "address", "name": "_tUSDC", "type": "address" }],

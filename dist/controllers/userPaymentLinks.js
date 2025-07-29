@@ -1,7 +1,9 @@
+import { config } from 'dotenv';
 import { PaymentLink } from '../models/PaymentLink.js';
 import { ContractReadService } from '../services/contractread.js';
 import { z } from 'zod';
 import mongoose from 'mongoose';
+config();
 const getPaginationSchema = z.object({
     page: z.string().optional().transform((val) => val ? parseInt(val) : 1),
     limit: z.string().optional().transform((val) => val ? parseInt(val) : 10),
@@ -301,6 +303,71 @@ export class UserPaymentLinksController {
             res.status(500).json({
                 success: false,
                 error: 'Failed to delete payment link',
+                details: error.message
+            });
+        }
+    }
+    async getPublicPaymentLink(req, res) {
+        try {
+            const { linkId } = req.params;
+            if (!linkId) {
+                return res.status(400).json({ error: 'Link ID is required' });
+            }
+            const paymentLink = await PaymentLink.findOne({
+                linkId: linkId
+            }).lean();
+            if (!paymentLink) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Payment link not found'
+                });
+            }
+            const contractReadService = new ContractReadService();
+            let blockchainStatus = null;
+            let onChainData = null;
+            try {
+                const isGlobal = paymentLink.amount === 0;
+                if (isGlobal) {
+                    const result = await contractReadService.checkGlobalPaymentLinkStatus(linkId);
+                    if (result.success) {
+                        blockchainStatus = 'active';
+                        onChainData = result.data;
+                    }
+                }
+                else {
+                    const result = await contractReadService.checkPaymentLinkStatus(linkId);
+                    if (result.success) {
+                        blockchainStatus = result.data.status;
+                        onChainData = result.data;
+                    }
+                }
+            }
+            catch (error) {
+                console.error(`Error fetching blockchain status for link ${linkId}:`, error);
+                blockchainStatus = 'unknown';
+            }
+            const enhancedPaymentLink = {
+                ...paymentLink,
+                type: paymentLink.amount === 0 ? 'global' : 'fixed',
+                blockchainStatus,
+                onChainData,
+                paymentUrl: paymentLink.amount === 0
+                    ? `${process.env.FRONTEND_URL || 'http://localhost:5173'}/global-paylink/${linkId}`
+                    : `${process.env.FRONTEND_URL || 'http://localhost:5173'}/paylink/${linkId}`,
+                shareableUrl: paymentLink.amount === 0
+                    ? `${process.env.FRONTEND_URL || 'http://localhost:5173'}/global-paylink/${linkId}`
+                    : `${process.env.FRONTEND_URL || 'http://localhost:5173'}/paylink/${linkId}`
+            };
+            res.json({
+                success: true,
+                data: enhancedPaymentLink
+            });
+        }
+        catch (error) {
+            console.error('Error fetching public payment link:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Failed to fetch payment link',
                 details: error.message
             });
         }

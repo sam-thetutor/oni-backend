@@ -1,5 +1,9 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { config } from 'dotenv';
 import { EncryptionService } from '../utils/encryption.js';
+
+// Load environment variables
+config();
 
 export interface IUser extends Document {
   privyId: string;
@@ -7,7 +11,6 @@ export interface IUser extends Document {
   walletAddress: string;
   frontendWalletAddress: string;
   encryptedPrivateKey: string;
-  chainId: number;
   points: number;
   totalVolume: number;
   weeklyPoints?: number;
@@ -57,11 +60,6 @@ const UserSchema = new Schema<IUser>({
     unique: true,
     sparse: true,
     index: true,
-  },
-  chainId: {
-    type: Number,
-    required: true,
-    default: 1, // Ethereum mainnet
   },
   points: {
     type: Number,

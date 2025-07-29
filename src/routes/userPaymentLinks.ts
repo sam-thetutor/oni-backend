@@ -5,7 +5,14 @@ import { authenticateToken } from '../middleware/auth.js';
 const router = Router();
 const userPaymentLinksController = new UserPaymentLinksController();
 
-// All routes require authentication
+// Public routes (no authentication required)
+/**
+ * GET /api/user/payment-links/public/:linkId
+ * Get specific payment link details (public access)
+ */
+router.get('/public/:linkId', userPaymentLinksController.getPublicPaymentLink);
+
+// Protected routes (authentication required)
 router.use(authenticateToken);
 
 /**

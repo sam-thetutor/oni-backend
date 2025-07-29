@@ -1,19 +1,40 @@
 import { ethers } from 'ethers';
+import { config } from 'dotenv';
 import { User } from '../models/User.js';
+config();
 export class WalletService {
-    static CHAIN_ID = parseInt(process.env.CHAIN_ID || '4157');
+    static CHAIN_ID = (() => {
+        const isProduction = process.env.ENVIRONMENT === 'production';
+        return isProduction
+            ? parseInt(process.env.CHAIN_ID || '4158')
+            : parseInt(process.env.CHAIN_ID_TESTNET || '4157');
+    })();
     static generateWallet() {
         const wallet = ethers.Wallet.createRandom();
         return {
             address: wallet.address,
             privateKey: wallet.privateKey,
-            chainId: this.CHAIN_ID,
         };
     }
     static async getUserWallet(privyId, frontendWalletAddress, email) {
         try {
-            let user = await User.findOne({ frontendWalletAddress });
+            let user = await User.findOne({ privyId });
             if (user) {
+                if (user.frontendWalletAddress !== frontendWalletAddress) {
+                    user.frontendWalletAddress = frontendWalletAddress;
+                    await user.save();
+                }
+                return user;
+            }
+            user = await User.findOne({ frontendWalletAddress });
+            if (user) {
+                if (user.privyId !== privyId) {
+                    user.privyId = privyId;
+                    if (email) {
+                        user.email = email;
+                    }
+                    await user.save();
+                }
                 return user;
             }
             const walletInfo = this.generateWallet();
@@ -23,7 +44,6 @@ export class WalletService {
                 frontendWalletAddress: frontendWalletAddress,
                 walletAddress: walletInfo.address,
                 encryptedPrivateKey: walletInfo.privateKey,
-                chainId: walletInfo.chainId,
             });
             await user.save();
             return user;
@@ -70,7 +90,7 @@ export class WalletService {
             return {
                 address: user.walletAddress,
                 privateKey: user.encryptedPrivateKey,
-                chainId: user.chainId,
+                chainId: this.CHAIN_ID,
             };
         }
         catch (error) {
@@ -87,7 +107,6 @@ export class WalletService {
             const newWalletInfo = this.generateWallet();
             user.walletAddress = newWalletInfo.address;
             user.encryptedPrivateKey = newWalletInfo.privateKey;
-            user.chainId = newWalletInfo.chainId;
             await user.save();
             return user;
         }

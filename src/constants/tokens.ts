@@ -1,7 +1,14 @@
-// Token contract addresses on CrossFi testnet
+import { config } from 'dotenv';
+config();
+
+// Environment-aware token contract addresses
+const isProduction = process.env.ENVIRONMENT === 'production';
+
 export const TOKEN_ADDRESSES = {
-  XFI: '0x0000000000000000000000000000000000000000', // Native token (address 0)
-  tUSDC: '0xc5C6691c4A6264eF595F1fdEBc7AC077bdD1Ee50', // tUSDC contract address
+  XFI: '0x0000000000000000000000000000000000000000', // Native token (address 0) - same for both networks
+  tUSDC: isProduction 
+    ? '0x0000000000000000000000000000000000000000' // TODO: Replace with actual mainnet tUSDC address when available
+    : '0xc5C6691c4A6264eF595F1fdEBc7AC077bdD1Ee50', // Testnet tUSDC contract address
 } as const;
 
 // Token metadata
@@ -15,8 +22,8 @@ export const TOKEN_METADATA = {
   },
   tUSDC: {
     symbol: 'tUSDC',
-    name: 'Test USD Coin',
-    decimals: 18, // Actual decimals for this CrossFi testnet tUSDC
+    name: isProduction ? 'USD Coin' : 'Test USD Coin',
+    decimals: 18,
     isNative: false,
     address: TOKEN_ADDRESSES.tUSDC,
   }

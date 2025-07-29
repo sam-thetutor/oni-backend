@@ -113,28 +113,25 @@ router.get('/achievements', authenticateToken, async (req, res) => {
         });
     }
 });
-
-// Get weekly leaderboard
 router.get('/weekly-leaderboard', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 100;
         const result = await GamificationService.getWeeklyLeaderboard(limit);
         console.log('Weekly Leaderboard:', result);
-
         res.json({
             success: true,
             leaderboard: result.leaderboard,
             stats: result.stats
         });
-    } catch (error) {
+    }
+    catch (error) {
         console.error('Error getting weekly leaderboard:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to get weekly leaderboard',
-            message: error.message 
+            message: error.message
         });
     }
 });
-
 router.post('/username', authenticateToken, async (req, res) => {
     try {
         const privyId = req.user?.id;
