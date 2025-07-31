@@ -75,8 +75,8 @@ export async function createDCAOrder(params: {
     const currentPrice = await PriceAnalyticsService.getMarketData().then(data => data.current_price);
     
     // Format response message
-    const tokenSymbol = params.orderType === 'buy' ? 'tUSDC' : 'XFI';
-    const targetSymbol = params.orderType === 'buy' ? 'XFI' : 'tUSDC';
+    const tokenSymbol = params.orderType === 'buy' ? 'USDC' : 'XFI';
+    const targetSymbol = params.orderType === 'buy' ? 'XFI' : 'USDC';
     const conditionText = params.triggerCondition === 'above' ? 'reaches or exceeds' : 'drops to or below';
     
     return {
@@ -84,7 +84,7 @@ export async function createDCAOrder(params: {
       orderId: order._id.toString(),
       message: `✅ DCA order created successfully!\n\n` +
         `📊 Order Details:\n` +
-        `• Type: ${params.orderType === 'buy' ? 'Buy XFI with tUSDC' : 'Sell XFI for tUSDC'}\n` +
+        `• Type: ${params.orderType === 'buy' ? 'Buy XFI with USDC' : 'Sell XFI for USDC'}\n` +
         `• Amount: ${params.amount} ${tokenSymbol}\n` +
         `• Trigger: When XFI price ${conditionText} $${params.triggerPrice}\n` +
         `• Current Price: $${currentPrice.toFixed(6)}\n` +
@@ -146,7 +146,7 @@ export async function getUserDCAOrders(params: {
       const statusText = params.status ? ` ${params.status}` : '';
       return {
         success: true,
-        message: `No${statusText} DCA orders found. You can create a new order by saying something like "swap 20 tUSDC when XFI hits $0.10".`,
+        message: `No${statusText} DCA orders found. You can create a new order by saying something like "swap 20 USDC when XFI hits $0.10".`,
         orders: [],
       };
     }
@@ -281,8 +281,8 @@ export async function getDCAOrderStatus(params: {
     // Format message based on order status
     let message = `📊 DCA Order Details (${order._id})\n\n`;
     message += `${getStatusEmoji(order.status)} Status: ${order.status.toUpperCase()}\n`;
-    message += `💱 Type: ${order.orderType === 'buy' ? 'Buy XFI with tUSDC' : 'Sell XFI for tUSDC'}\n`;
-    message += `💰 Amount: ${TokenService.formatTokenAmount(order.fromAmount, order.orderType === 'buy' ? 6 : 18)} ${order.orderType === 'buy' ? 'tUSDC' : 'XFI'}\n`;
+            message += `💱 Type: ${order.orderType === 'buy' ? 'Buy XFI with USDC' : 'Sell XFI for USDC'}\n`;
+          message += `💰 Amount: ${TokenService.formatTokenAmount(order.fromAmount, order.orderType === 'buy' ? 6 : 18)} ${order.orderType === 'buy' ? 'USDC' : 'XFI'}\n`;
     message += `🎯 Trigger: $${order.triggerPrice} (${distanceText})\n`;
     message += `📈 Current Price: $${currentPrice.toFixed(6)}\n`;
     message += `📅 Created: ${order.createdAt.toLocaleString()}\n`;
@@ -332,8 +332,8 @@ export async function getDCAOrderStatus(params: {
  * Provides a quote for immediate token swap
  */
 export async function getSwapQuote(params: {
-  fromToken: 'XFI' | 'tUSDC';
-  toToken: 'XFI' | 'tUSDC';
+  fromToken: 'XFI' | 'CFI' | 'WXFI' | 'FOMO' | 'WETH' | 'USDC' | 'WBTC' | 'USDT' | 'BNB' | 'SOL' | 'XUSD';
+  toToken: 'XFI' | 'CFI' | 'WXFI' | 'FOMO' | 'WETH' | 'USDC' | 'WBTC' | 'USDT' | 'BNB' | 'SOL' | 'XUSD';
   amount: string;
   slippage?: number;
 }): Promise<{
@@ -342,19 +342,23 @@ export async function getSwapQuote(params: {
   quote?: any;
 }> {
   try {
-    const quote = await SwapService.getSwapQuote(
-      params.fromToken,
-      params.toToken,
-      params.amount,
-      params.slippage || 5
-    );
+    // Map XFI to CFI since they point to the same address
+    const mappedFromToken = params.fromToken === 'XFI' ? 'CFI' : params.fromToken;
+    const mappedToToken = params.toToken === 'XFI' ? 'CFI' : params.toToken;
+    
+    const quote = await SwapService.getSwapQuote({
+      fromToken: mappedFromToken,
+      toToken: mappedToToken,
+      fromAmount: params.amount,
+      slippage: params.slippage || 5
+    });
 
     const message = `💱 Swap Quote\n\n` +
       `📥 You give: ${quote.fromAmountFormatted} ${quote.fromToken}\n` +
       `📤 You get: ${quote.toAmountFormatted} ${quote.toToken}\n` +
       `💰 Price: $${quote.price.toFixed(6)} per XFI\n` +
       `🎯 Min. received: ${quote.minimumReceivedFormatted} ${quote.toToken}\n` +
-      `⛽ Est. gas fee: ${quote.gasFeeFormatted} XFI\n` +
+      `⛽ Est. gas fee: ${quote.gasEstimateFormatted} XFI\n` +
       `📊 Slippage: ${quote.slippage}%\n\n` +
       `Note: This is an instant swap quote. For automated swaps based on price triggers, use DCA orders.`;
 
@@ -442,7 +446,7 @@ export async function getUserTokenBalances(params: {
       message += `${balance.symbol === 'XFI' ? '🔵' : '🟢'} ${balance.symbol}: ${parseFloat(balance.formatted).toFixed(6)}\n`;
     });
 
-    message += `\n💡 You can create DCA orders to automatically swap between XFI and tUSDC based on price triggers.`;
+    message += `\n💡 You can create DCA orders to automatically swap between XFI and USDC/USDT based on price triggers.`;
 
     return {
       success: true,

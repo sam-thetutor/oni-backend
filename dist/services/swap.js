@@ -1,504 +1,402 @@
 import { parseUnits, formatUnits } from 'viem';
 import { config } from 'dotenv';
+import { SWAP_ROUTER_ADDRESS, SWAP_ROUTER_ABI } from '../constants/contract.js';
+import { TOKEN_ADDRESSES, SWAP_CONFIG, validateSwapSlippage, isSupportedSwapToken, getTokenBySymbol } from '../constants/tokens.js';
+import { SwapErrorCode } from '../types/swap.js';
 import { publicClient, createWalletClientFromPrivateKey } from '../config/viem.js';
-import { TokenService } from './tokens.js';
-import { PriceAnalyticsService } from './price-analytics.js';
-import { TOKEN_ADDRESSES, TOKEN_METADATA } from '../constants/tokens.js';
-import { ERC20_ABI } from '../constants/abi.js';
-import { SWAP_CONTRACT_ADDRESS, SWAP_CONTRACT_ABI } from '../constants/contract.js';
 config();
+const ERC20_ABI = [
+    {
+        "constant": true,
+        "inputs": [{ "name": "_owner", "type": "address" }],
+        "name": "balanceOf",
+        "outputs": [{ "name": "balance", "type": "uint256" }],
+        "type": "function"
+    },
+    {
+        "constant": true,
+        "inputs": [
+            { "name": "_owner", "type": "address" },
+            { "name": "_spender", "type": "address" }
+        ],
+        "name": "allowance",
+        "outputs": [{ "name": "", "type": "uint256" }],
+        "type": "function"
+    },
+    {
+        "constant": false,
+        "inputs": [
+            { "name": "_spender", "type": "address" },
+            { "name": "_value", "type": "uint256" }
+        ],
+        "name": "approve",
+        "outputs": [{ "name": "", "type": "bool" }],
+        "type": "function"
+    }
+];
 export class SwapService {
-    static async getXFIPrice() {
+    static async getSwapQuote(params) {
         try {
-            const priceResult = await publicClient.readContract({
-                address: SWAP_CONTRACT_ADDRESS,
-                abi: SWAP_CONTRACT_ABI,
-                functionName: 'getCurrentXFIPrice',
-                args: [],
-            });
-            const priceInUSD = formatUnits(priceResult, 6);
-            return parseFloat(priceInUSD);
-        }
-        catch (error) {
-            console.error('Error getting XFI price from contract:', error);
-            try {
-                const marketData = await PriceAnalyticsService.getMarketData();
-                return marketData.current_price;
+            const { fromToken, toToken, fromAmount, slippage = SWAP_CONFIG.DEFAULT_SLIPPAGE } = params;
+            if (!isSupportedSwapToken(fromToken) || !isSupportedSwapToken(toToken)) {
+                throw new Error(`Unsupported token pair: ${fromToken} to ${toToken}`);
             }
-            catch (fallbackError) {
-                console.error('Fallback price API also failed:', fallbackError);
-                return 0.082;
+            if (!validateSwapSlippage(slippage)) {
+                throw new Error(`Invalid slippage: ${slippage}%. Must be between ${SWAP_CONFIG.MIN_SLIPPAGE}% and ${SWAP_CONFIG.MAX_SLIPPAGE}%`);
             }
-        }
-    }
-    static async checkLiquidity() {
-        try {
-            const reserves = await publicClient.readContract({
-                address: SWAP_CONTRACT_ADDRESS,
-                abi: SWAP_CONTRACT_ABI,
-                functionName: 'getReserves',
-                args: [],
-            });
-            const xfiReserve = reserves[0];
-            const tUSDCReserve = reserves[1];
-            const xfiReserveFormatted = formatUnits(xfiReserve, 18);
-            const tUSDCReserveFormatted = formatUnits(tUSDCReserve, 6);
-            const hasLiquidity = parseFloat(xfiReserveFormatted) > 0 && parseFloat(tUSDCReserveFormatted) > 0;
-            return {
-                hasLiquidity,
-                xfiReserve: xfiReserveFormatted,
-                tUSDCReserve: tUSDCReserveFormatted,
-            };
-        }
-        catch (error) {
-            console.error('Error checking liquidity:', error);
-            return {
-                hasLiquidity: false,
-                xfiReserve: '0',
-                tUSDCReserve: '0',
-            };
-        }
-    }
-    static async getSwapQuote(fromToken, toToken, fromAmount, slippage = 5) {
-        try {
-            const fromTokenMeta = Object.values(TOKEN_METADATA).find(t => t.symbol === fromToken || t.address.toLowerCase() === fromToken.toLowerCase());
-            const toTokenMeta = Object.values(TOKEN_METADATA).find(t => t.symbol === toToken || t.address.toLowerCase() === toToken.toLowerCase());
+            const fromTokenMeta = getTokenBySymbol(fromToken);
+            const toTokenMeta = getTokenBySymbol(toToken);
             if (!fromTokenMeta || !toTokenMeta) {
-                throw new Error('Token not found');
+                throw new Error('Invalid token symbols');
             }
-            const liquidityCheck = await this.checkLiquidity();
-            if (!liquidityCheck.hasLiquidity) {
-                throw new Error('No liquidity available in the pool. Please add liquidity first.');
+            const fromTokenAddress = fromTokenMeta.address;
+            const toTokenAddress = toTokenMeta.address;
+            const fromAmountWei = parseUnits(fromAmount, fromTokenMeta.decimals);
+            const isNativeXFI = fromToken === 'CFI' || fromToken === 'XFI';
+            const isToNativeXFI = toToken === 'CFI' || toToken === 'XFI';
+            let path;
+            if (isNativeXFI && !isToNativeXFI) {
+                path = [TOKEN_ADDRESSES.WXFI, toTokenAddress];
             }
-            const fromAmountParsed = parseUnits(fromAmount, fromTokenMeta.decimals);
-            let toAmountBigInt;
-            let price;
-            const xfiReserve = parseUnits(liquidityCheck.xfiReserve, 18);
-            const tUSDCReserve = parseUnits(liquidityCheck.tUSDCReserve, 6);
-            if (fromToken === 'tUSDC' && toToken === 'XFI') {
-                const result = await publicClient.readContract({
-                    address: SWAP_CONTRACT_ADDRESS,
-                    abi: SWAP_CONTRACT_ABI,
-                    functionName: 'getAmountOut',
-                    args: [fromAmountParsed, tUSDCReserve, xfiReserve],
-                });
-                toAmountBigInt = result;
-                const xfiAmount = formatUnits(toAmountBigInt, 18);
-                price = parseFloat(fromAmount) / parseFloat(xfiAmount);
-            }
-            else if (fromToken === 'XFI' && toToken === 'tUSDC') {
-                const result = await publicClient.readContract({
-                    address: SWAP_CONTRACT_ADDRESS,
-                    abi: SWAP_CONTRACT_ABI,
-                    functionName: 'getAmountOut',
-                    args: [fromAmountParsed, xfiReserve, tUSDCReserve],
-                });
-                toAmountBigInt = result;
-                const tUSDCAmount = formatUnits(toAmountBigInt, 6);
-                price = parseFloat(tUSDCAmount) / parseFloat(fromAmount);
+            else if (!isNativeXFI && isToNativeXFI) {
+                path = [fromTokenAddress, TOKEN_ADDRESSES.WXFI];
             }
             else {
-                throw new Error('Unsupported swap pair');
+                path = [fromTokenAddress, toTokenAddress];
             }
-            const toAmount = formatUnits(toAmountBigInt, toTokenMeta.decimals);
+            const amountsOut = await publicClient.readContract({
+                address: SWAP_ROUTER_ADDRESS,
+                abi: SWAP_ROUTER_ABI,
+                functionName: 'getAmountsOut',
+                args: [fromAmountWei, path],
+            });
+            if (!amountsOut || amountsOut.length < 2) {
+                throw new Error('Failed to get swap quote');
+            }
+            const toAmountWei = amountsOut[amountsOut.length - 1];
+            const toAmount = formatUnits(toAmountWei, toTokenMeta.decimals);
+            const priceImpact = 0.1;
             const slippageMultiplier = (100 - slippage) / 100;
-            const minimumReceived = (parseFloat(toAmount) * slippageMultiplier).toString();
-            const gasFee = '0.002';
+            const minimumReceivedWei = toAmountWei * BigInt(Math.floor(slippageMultiplier * 1000)) / 1000n;
+            const minimumReceived = formatUnits(minimumReceivedWei, toTokenMeta.decimals);
+            const gasEstimate = path.length > 2 ? '200000' : '150000';
+            const deadline = Math.floor(Date.now() / 1000) + (SWAP_CONFIG.DEADLINE_MINUTES * 60);
+            const price = parseFloat(toAmount) / parseFloat(fromAmount);
             return {
-                fromToken: fromTokenMeta.symbol,
-                toToken: toTokenMeta.symbol,
+                fromToken,
+                toToken,
                 fromAmount,
                 toAmount,
-                fromAmountFormatted: fromAmount,
-                toAmountFormatted: parseFloat(toAmount).toFixed(6),
+                fromAmountFormatted: `${fromAmount} ${fromToken}`,
+                toAmountFormatted: `${toAmount} ${toToken}`,
                 price,
-                slippage,
+                priceImpact,
                 minimumReceived,
-                minimumReceivedFormatted: parseFloat(minimumReceived).toFixed(6),
-                gasFee,
-                gasFeeFormatted: gasFee,
+                minimumReceivedFormatted: `${minimumReceived} ${toToken}`,
+                gasEstimate,
+                gasEstimateFormatted: `${gasEstimate} gas`,
+                slippage,
+                path,
+                deadline,
             };
         }
         catch (error) {
             console.error('Error getting swap quote:', error);
-            throw new Error('Failed to get swap quote');
+            throw new Error(`Failed to get swap quote: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
-    static async validateSwap(user, fromToken, fromAmount, slippage) {
+    static async validateSwap(user, params) {
         try {
-            if (slippage < 0.1 || slippage > 50) {
+            const { fromToken, toToken, fromAmount, slippage = SWAP_CONFIG.DEFAULT_SLIPPAGE } = params;
+            if (!isSupportedSwapToken(fromToken) || !isSupportedSwapToken(toToken)) {
                 return {
                     valid: false,
-                    error: 'Slippage must be between 0.1% and 50%',
+                    error: `Unsupported token pair: ${fromToken} to ${toToken}`,
                 };
             }
-            const amount = parseFloat(fromAmount);
-            if (amount <= 0) {
+            if (!validateSwapSlippage(slippage)) {
                 return {
                     valid: false,
-                    error: 'Amount must be greater than 0',
+                    error: `Invalid slippage: ${slippage}%. Must be between ${SWAP_CONFIG.MIN_SLIPPAGE}% and ${SWAP_CONFIG.MAX_SLIPPAGE}%`,
                 };
             }
-            const fromTokenMeta = Object.values(TOKEN_METADATA).find(t => t.symbol === fromToken || t.address.toLowerCase() === fromToken.toLowerCase());
+            const fromTokenMeta = getTokenBySymbol(fromToken);
             if (!fromTokenMeta) {
                 return {
                     valid: false,
-                    error: 'Token not found',
+                    error: `Invalid from token: ${fromToken}`,
                 };
             }
-            const balanceCheck = await TokenService.validateSufficientBalance(fromTokenMeta.address, user.walletAddress, fromAmount, true);
-            if (!balanceCheck.sufficient) {
+            if (!user.walletAddress) {
                 return {
                     valid: false,
-                    error: `Insufficient balance. Required: ${balanceCheck.required}, Available: ${balanceCheck.balance}`,
-                    balanceCheck,
+                    error: 'User has no wallet address',
                 };
             }
-            return { valid: true, balanceCheck };
+            const userAddress = user.walletAddress;
+            let balance;
+            if (fromTokenMeta.isNative) {
+                balance = await publicClient.getBalance({ address: userAddress });
+            }
+            else {
+                balance = await publicClient.readContract({
+                    address: fromTokenMeta.address,
+                    abi: ERC20_ABI,
+                    functionName: 'balanceOf',
+                    args: [userAddress],
+                });
+            }
+            const requiredAmount = parseUnits(fromAmount, fromTokenMeta.decimals);
+            const balanceFormatted = formatUnits(balance, fromTokenMeta.decimals);
+            if (balance < requiredAmount) {
+                return {
+                    valid: false,
+                    error: `Insufficient ${fromToken} balance. Required: ${fromAmount}, Available: ${balanceFormatted}`,
+                    balance: balanceFormatted,
+                };
+            }
+            let allowance = 0n;
+            let needsApproval = false;
+            if (!fromTokenMeta.isNative) {
+                allowance = await publicClient.readContract({
+                    address: fromTokenMeta.address,
+                    abi: ERC20_ABI,
+                    functionName: 'allowance',
+                    args: [userAddress, SWAP_ROUTER_ADDRESS],
+                });
+                needsApproval = allowance < requiredAmount;
+            }
+            const warnings = [];
+            if (needsApproval) {
+                warnings.push(`Token approval required for ${fromToken}`);
+            }
+            return {
+                valid: true,
+                balance: balanceFormatted,
+                allowance: formatUnits(allowance, fromTokenMeta.decimals),
+                needsApproval,
+                warnings,
+            };
         }
         catch (error) {
             console.error('Error validating swap:', error);
             return {
                 valid: false,
-                error: 'Failed to validate swap',
+                error: `Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
             };
         }
     }
-    static async executeSwap(user, fromToken, toToken, fromAmount, slippage = 5, maxSlippage = 10) {
+    static async executeSwap(user, params) {
         try {
-            const validation = await this.validateSwap(user, fromToken, fromAmount, slippage);
+            console.log(`🔄 Executing swap: ${params.fromAmount} ${params.fromToken} -> ${params.toToken}`);
+            const validation = await this.validateSwap(user, params);
             if (!validation.valid) {
                 return {
                     success: false,
                     error: validation.error,
+                    errorCode: SwapErrorCode.INVALID_TOKEN_PAIR,
+                    fromAmount: params.fromAmount,
+                    fromToken: params.fromToken,
+                    toToken: params.toToken,
                 };
             }
-            const quote = await this.getSwapQuote(fromToken, toToken, fromAmount, slippage);
-            const currentPrice = await this.getXFIPrice();
-            const priceChangePercentage = Math.abs((currentPrice - quote.price) / quote.price) * 100;
-            if (priceChangePercentage > maxSlippage) {
+            const quote = await this.getSwapQuote(params);
+            if (!quote) {
                 return {
                     success: false,
-                    error: `Price changed by ${priceChangePercentage.toFixed(2)}% since quote. Please try again.`,
+                    error: 'Failed to get swap quote',
+                    errorCode: SwapErrorCode.UNKNOWN_ERROR,
+                    fromAmount: params.fromAmount,
+                    fromToken: params.fromToken,
+                    toToken: params.toToken,
                 };
             }
-            const fromTokenMeta = Object.values(TOKEN_METADATA).find(t => t.symbol === fromToken);
-            const toTokenMeta = Object.values(TOKEN_METADATA).find(t => t.symbol === toToken);
-            if (!fromTokenMeta || !toTokenMeta) {
-                return {
-                    success: false,
-                    error: 'Token metadata not found',
-                };
+            if (validation.needsApproval) {
+                const approvalResult = await this.approveToken(user, params.fromToken, params.fromAmount);
+                if (!approvalResult.success) {
+                    return {
+                        success: false,
+                        error: `Token approval failed: ${approvalResult.error}`,
+                        errorCode: SwapErrorCode.INSUFFICIENT_ALLOWANCE,
+                        fromAmount: params.fromAmount,
+                        fromToken: params.fromToken,
+                        toToken: params.toToken,
+                    };
+                }
             }
-            let result;
-            if (fromToken === 'tUSDC' && toToken === 'XFI') {
-                result = await this.executeTUSDCToXFISwap(user, fromAmount, quote);
-            }
-            else if (fromToken === 'XFI' && toToken === 'tUSDC') {
-                result = await this.executeXFIToTUSDCSwap(user, fromAmount, quote);
-            }
-            else {
-                return {
-                    success: false,
-                    error: 'Unsupported swap pair',
-                };
-            }
-            return result;
+            const swapResult = await this.executeSwapTransaction(user, quote, params);
+            return swapResult;
         }
         catch (error) {
             console.error('Error executing swap:', error);
             return {
                 success: false,
-                error: error.message || 'Failed to execute swap',
+                error: error instanceof Error ? error.message : 'Unknown error',
+                errorCode: SwapErrorCode.UNKNOWN_ERROR,
+                fromAmount: params.fromAmount,
+                fromToken: params.fromToken,
+                toToken: params.toToken,
             };
         }
     }
-    static async executeTUSDCToXFISwap(user, tUSDCAmount, quote) {
+    static async approveToken(user, tokenSymbol, amount) {
         try {
-            console.log(`Executing tUSDC to XFI swap: ${tUSDCAmount} tUSDC -> ${quote.toAmount} XFI`);
-            const walletClient = createWalletClientFromPrivateKey(user.encryptedPrivateKey);
-            const tUSDCMeta = TOKEN_METADATA.tUSDC;
-            const tUSDCAmount_BigInt = parseUnits(tUSDCAmount, tUSDCMeta.decimals);
-            const minXFIAmount = parseUnits(quote.minimumReceived, 18);
-            console.log('Step 1: Approving tUSDC spending...');
-            const approvalHash = await walletClient.writeContract({
-                address: TOKEN_ADDRESSES.tUSDC,
+            const tokenMeta = getTokenBySymbol(tokenSymbol);
+            if (!tokenMeta || tokenMeta.isNative) {
+                return { success: true };
+            }
+            const fundingPrivateKey = process.env.FUNDING_PRIVATE_KEY;
+            if (!fundingPrivateKey) {
+                return { success: false, error: 'Funding wallet not configured' };
+            }
+            const walletClient = createWalletClientFromPrivateKey(fundingPrivateKey);
+            if (!walletClient) {
+                return { success: false, error: 'Failed to create wallet client' };
+            }
+            const amountWei = parseUnits(amount, tokenMeta.decimals);
+            const hash = await walletClient.writeContract({
+                address: tokenMeta.address,
                 abi: ERC20_ABI,
                 functionName: 'approve',
-                args: [SWAP_CONTRACT_ADDRESS, tUSDCAmount_BigInt],
+                args: [SWAP_ROUTER_ADDRESS, amountWei],
+                chain: undefined,
+                account: walletClient.account,
             });
-            const approvalReceipt = await publicClient.waitForTransactionReceipt({ hash: approvalHash });
-            if (approvalReceipt.status !== 'success') {
-                throw new Error('Approval transaction failed');
-            }
-            console.log('Step 2: Executing tUSDC to XFI swap...');
-            const swapHash = await walletClient.writeContract({
-                address: SWAP_CONTRACT_ADDRESS,
-                abi: SWAP_CONTRACT_ABI,
-                functionName: 'swapTUSDCForXFI',
-                args: [tUSDCAmount_BigInt, minXFIAmount],
-            });
-            const swapReceipt = await publicClient.waitForTransactionReceipt({ hash: swapHash });
-            if (swapReceipt.status === 'success') {
-                console.log(`✅ tUSDC to XFI swap successful. Transaction: ${swapReceipt.transactionHash}`);
-                try {
-                    const { getIO } = await import('../socket/index.js');
-                    const { emitBalanceUpdate, emitNewTransaction, emitTransactionSuccess } = await import('../socket/events.js');
-                    const io = getIO();
-                    emitTransactionSuccess(io, user.walletAddress, {
-                        transactionHash: swapReceipt.transactionHash,
-                        from: user.walletAddress,
-                        to: 'Swap Contract',
-                        value: `${tUSDCAmount} tUSDC → ${quote.toAmount} XFI`,
-                        status: 'success',
-                        explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${swapReceipt.transactionHash}`
-                    });
-                    emitNewTransaction(io, user.walletAddress, {
-                        hash: swapReceipt.transactionHash,
-                        from: user.walletAddress,
-                        to: 'Swap Contract',
-                        value: `${tUSDCAmount} tUSDC → ${quote.toAmount} XFI`,
-                        status: 'success',
-                        timestamp: new Date().toISOString()
-                    });
-                    setTimeout(async () => {
-                        try {
-                            const { BlockchainService } = await import('./blockchain.js');
-                            const balance = await BlockchainService.getBalance(user.walletAddress);
-                            emitBalanceUpdate(io, user.walletAddress, {
-                                address: balance.address,
-                                balance: balance.balance,
-                                formatted: balance.formatted,
-                                symbol: 'XFI'
-                            });
-                        }
-                        catch (balanceError) {
-                            console.error('Error fetching updated balance:', balanceError);
-                        }
-                    }, 2000);
-                }
-                catch (socketError) {
-                    console.error('Error emitting real-time events:', socketError);
-                }
-                return {
-                    success: true,
-                    transactionHash: swapReceipt.transactionHash,
-                    fromAmount: tUSDCAmount,
-                    toAmount: quote.toAmount,
-                    actualPrice: quote.price,
-                };
-            }
-            else {
-                throw new Error('Swap transaction failed');
-            }
+            console.log(`✅ Token approval successful: ${hash}`);
+            return { success: true };
         }
         catch (error) {
-            console.error('Error executing tUSDC to XFI swap:', error);
+            console.error('Error approving token:', error);
             return {
                 success: false,
-                error: error.message,
+                error: error instanceof Error ? error.message : 'Unknown error',
             };
         }
     }
-    static async executeXFIToTUSDCSwap(user, xfiAmount, quote) {
+    static async executeSwapTransaction(user, quote, params) {
         try {
-            console.log(`Executing XFI to tUSDC swap: ${xfiAmount} XFI -> ${quote.toAmount} tUSDC`);
+            if (!user.encryptedPrivateKey) {
+                return {
+                    success: false,
+                    error: 'User wallet not configured',
+                    errorCode: SwapErrorCode.UNKNOWN_ERROR,
+                    fromAmount: params.fromAmount,
+                    fromToken: params.fromToken,
+                    toToken: params.toToken,
+                };
+            }
             const walletClient = createWalletClientFromPrivateKey(user.encryptedPrivateKey);
-            const xfiAmount_BigInt = parseUnits(xfiAmount, 18);
-            const minTUSDCAmount = parseUnits(quote.minimumReceived, 6);
-            console.log('Executing XFI to tUSDC swap...');
-            const swapHash = await walletClient.writeContract({
-                address: SWAP_CONTRACT_ADDRESS,
-                abi: SWAP_CONTRACT_ABI,
-                functionName: 'swapXFIForTUSDC',
-                args: [minTUSDCAmount],
-                value: xfiAmount_BigInt,
-            });
-            const swapReceipt = await publicClient.waitForTransactionReceipt({ hash: swapHash });
-            if (swapReceipt.status === 'success') {
-                console.log(`✅ XFI to tUSDC swap successful. Transaction: ${swapReceipt.transactionHash}`);
-                try {
-                    const { getIO } = await import('../socket/index.js');
-                    const { emitBalanceUpdate, emitNewTransaction, emitTransactionSuccess } = await import('../socket/events.js');
-                    const io = getIO();
-                    emitTransactionSuccess(io, user.walletAddress, {
-                        transactionHash: swapReceipt.transactionHash,
-                        from: user.walletAddress,
-                        to: 'Swap Contract',
-                        value: `${xfiAmount} XFI → ${quote.toAmount} tUSDC`,
-                        status: 'success',
-                        explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${swapReceipt.transactionHash}`
-                    });
-                    emitNewTransaction(io, user.walletAddress, {
-                        hash: swapReceipt.transactionHash,
-                        from: user.walletAddress,
-                        to: 'Swap Contract',
-                        value: `${xfiAmount} XFI → ${quote.toAmount} tUSDC`,
-                        status: 'success',
-                        timestamp: new Date().toISOString()
-                    });
-                    setTimeout(async () => {
-                        try {
-                            const { BlockchainService } = await import('./blockchain.js');
-                            const balance = await BlockchainService.getBalance(user.walletAddress);
-                            emitBalanceUpdate(io, user.walletAddress, {
-                                address: balance.address,
-                                balance: balance.balance,
-                                formatted: balance.formatted,
-                                symbol: 'XFI'
-                            });
-                        }
-                        catch (balanceError) {
-                            console.error('Error fetching updated balance:', balanceError);
-                        }
-                    }, 2000);
-                }
-                catch (socketError) {
-                    console.error('Error emitting real-time events:', socketError);
-                }
+            if (!walletClient) {
                 return {
-                    success: true,
-                    transactionHash: swapReceipt.transactionHash,
-                    fromAmount: xfiAmount,
-                    toAmount: quote.toAmount,
-                    actualPrice: quote.price,
+                    success: false,
+                    error: 'Failed to create wallet client',
+                    errorCode: SwapErrorCode.UNKNOWN_ERROR,
+                    fromAmount: params.fromAmount,
+                    fromToken: params.fromToken,
+                    toToken: params.toToken,
                 };
             }
-            else {
-                throw new Error('Swap transaction failed');
-            }
-        }
-        catch (error) {
-            console.error('Error executing XFI to tUSDC swap:', error);
-            return {
-                success: false,
-                error: error.message,
-            };
-        }
-    }
-    static async getSwapHistory(userId, limit = 10) {
-        return [];
-    }
-    static async getBestSwapRoute(fromToken, toToken, amount) {
-        return await this.getSwapQuote(fromToken, toToken, amount);
-    }
-    static async calculatePriceImpact(fromToken, toToken, amount) {
-        try {
-            const largeAmount = (parseFloat(amount) * 10).toString();
-            const normalQuote = await this.getSwapQuote(fromToken, toToken, amount);
-            const largeQuote = await this.getSwapQuote(fromToken, toToken, largeAmount);
-            const normalPrice = parseFloat(normalQuote.toAmount) / parseFloat(normalQuote.fromAmount);
-            const largePrice = parseFloat(largeQuote.toAmount) / parseFloat(largeQuote.fromAmount);
-            const priceImpact = Math.abs((largePrice - normalPrice) / normalPrice) * 100;
-            return Math.min(priceImpact, 0.1);
-        }
-        catch (error) {
-            console.error('Error calculating price impact:', error);
-            return 0;
-        }
-    }
-    static async getSwapGasFee(fromToken, toToken) {
-        try {
-            const baseGas = fromToken === 'tUSDC' ? '0.002' : '0.001';
-            return {
-                gasFee: baseGas,
-                gasFeeFormatted: baseGas,
-            };
-        }
-        catch (error) {
-            console.error('Error estimating gas fee:', error);
-            return {
-                gasFee: '0.001',
-                gasFeeFormatted: '0.001',
-            };
-        }
-    }
-    static async addLiquidity(user, xfiAmount, tUSDCAmount, slippage = 5) {
-        try {
-            console.log(`Adding liquidity: ${xfiAmount} XFI + ${tUSDCAmount} tUSDC`);
-            const walletClient = createWalletClientFromPrivateKey(user.encryptedPrivateKey);
-            const xfiAmountParsed = parseUnits(xfiAmount, 18);
-            const tUSDCAmountParsed = parseUnits(tUSDCAmount, 6);
-            const slippageMultiplier = (100 - slippage) / 100;
-            const minXFIAmount = parseUnits((parseFloat(xfiAmount) * slippageMultiplier).toString(), 18);
-            const minTUSDCAmount = parseUnits((parseFloat(tUSDCAmount) * slippageMultiplier).toString(), 6);
-            console.log('Step 1: Approving tUSDC spending for liquidity...');
-            const approvalHash = await walletClient.writeContract({
-                address: TOKEN_ADDRESSES.tUSDC,
-                abi: ERC20_ABI,
-                functionName: 'approve',
-                args: [SWAP_CONTRACT_ADDRESS, tUSDCAmountParsed],
-            });
-            const approvalReceipt = await publicClient.waitForTransactionReceipt({ hash: approvalHash });
-            if (approvalReceipt.status !== 'success') {
-                throw new Error('Approval transaction failed');
-            }
-            console.log('Step 2: Adding liquidity...');
-            const liquidityHash = await walletClient.writeContract({
-                address: SWAP_CONTRACT_ADDRESS,
-                abi: SWAP_CONTRACT_ABI,
-                functionName: 'addLiquidity',
-                args: [tUSDCAmountParsed, minXFIAmount, minTUSDCAmount],
-                value: xfiAmountParsed,
-            });
-            const liquidityReceipt = await publicClient.waitForTransactionReceipt({ hash: liquidityHash });
-            if (liquidityReceipt.status === 'success') {
-                console.log(`✅ Liquidity added successfully. Transaction: ${liquidityReceipt.transactionHash}`);
-                try {
-                    const { getIO } = await import('../socket/index.js');
-                    const { emitBalanceUpdate, emitNewTransaction, emitTransactionSuccess } = await import('../socket/events.js');
-                    const io = getIO();
-                    emitTransactionSuccess(io, user.walletAddress, {
-                        transactionHash: liquidityReceipt.transactionHash,
-                        from: user.walletAddress,
-                        to: 'Liquidity Pool',
-                        value: `${xfiAmount} XFI + ${tUSDCAmount} tUSDC`,
-                        status: 'success',
-                        explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${liquidityReceipt.transactionHash}`
-                    });
-                    emitNewTransaction(io, user.walletAddress, {
-                        hash: liquidityReceipt.transactionHash,
-                        from: user.walletAddress,
-                        to: 'Liquidity Pool',
-                        value: `${xfiAmount} XFI + ${tUSDCAmount} tUSDC`,
-                        status: 'success',
-                        timestamp: new Date().toISOString()
-                    });
-                    setTimeout(async () => {
-                        try {
-                            const { BlockchainService } = await import('./blockchain.js');
-                            const balance = await BlockchainService.getBalance(user.walletAddress);
-                            emitBalanceUpdate(io, user.walletAddress, {
-                                address: balance.address,
-                                balance: balance.balance,
-                                formatted: balance.formatted,
-                                symbol: 'XFI'
-                            });
-                        }
-                        catch (balanceError) {
-                            console.error('Error fetching updated balance:', balanceError);
-                        }
-                    }, 2000);
-                }
-                catch (socketError) {
-                    console.error('Error emitting real-time events:', socketError);
-                }
+            const fromTokenMeta = getTokenBySymbol(params.fromToken);
+            const toTokenMeta = getTokenBySymbol(params.toToken);
+            if (!fromTokenMeta || !toTokenMeta) {
                 return {
-                    success: true,
-                    transactionHash: liquidityReceipt.transactionHash,
+                    success: false,
+                    error: 'Invalid token metadata',
+                    errorCode: SwapErrorCode.INVALID_TOKEN_PAIR,
+                    fromAmount: params.fromAmount,
+                    fromToken: params.fromToken,
+                    toToken: params.toToken,
                 };
             }
-            else {
-                throw new Error('Liquidity transaction failed');
+            const fromAmountWei = parseUnits(params.fromAmount, fromTokenMeta.decimals);
+            const minimumReceivedWei = parseUnits(quote.minimumReceived, toTokenMeta.decimals);
+            const recipient = (params.recipient || user.walletAddress);
+            let hash;
+            if (fromTokenMeta.isNative) {
+                hash = await walletClient.writeContract({
+                    address: SWAP_ROUTER_ADDRESS,
+                    abi: SWAP_ROUTER_ABI,
+                    functionName: 'swapExactETHForTokens',
+                    args: [
+                        minimumReceivedWei,
+                        quote.path,
+                        recipient,
+                        BigInt(quote.deadline)
+                    ],
+                    value: fromAmountWei,
+                });
             }
-        }
-        catch (error) {
-            console.error('Error adding liquidity:', error);
+            else if (toTokenMeta.isNative) {
+                hash = await walletClient.writeContract({
+                    address: SWAP_ROUTER_ADDRESS,
+                    abi: SWAP_ROUTER_ABI,
+                    functionName: 'swapExactTokensForETH',
+                    args: [
+                        fromAmountWei,
+                        minimumReceivedWei,
+                        quote.path,
+                        recipient,
+                        BigInt(quote.deadline)
+                    ],
+                });
+            }
+            else {
+                hash = await walletClient.writeContract({
+                    address: SWAP_ROUTER_ADDRESS,
+                    abi: SWAP_ROUTER_ABI,
+                    functionName: 'swapExactTokensForTokens',
+                    args: [
+                        fromAmountWei,
+                        minimumReceivedWei,
+                        quote.path,
+                        recipient,
+                        BigInt(quote.deadline)
+                    ],
+                });
+            }
+            console.log(`✅ Swap transaction submitted: ${hash}`);
+            const receipt = await publicClient.waitForTransactionReceipt({ hash: hash });
             return {
-                success: false,
-                error: error.message,
+                success: true,
+                transactionHash: hash,
+                fromAmount: params.fromAmount,
+                toAmount: quote.toAmount,
+                fromToken: params.fromToken,
+                toToken: params.toToken,
+                gasUsed: receipt.gasUsed?.toString(),
+                gasPrice: receipt.effectiveGasPrice?.toString(),
             };
         }
+        catch (error) {
+            console.error('Error executing swap transaction:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                errorCode: SwapErrorCode.TRANSACTION_FAILED,
+                fromAmount: params.fromAmount,
+                fromToken: params.fromToken,
+                toToken: params.toToken,
+            };
+        }
+    }
+    static getSupportedPairs() {
+        const pairs = [];
+        const tokens = SWAP_CONFIG.SUPPORTED_TOKENS;
+        for (let i = 0; i < tokens.length; i++) {
+            for (let j = 0; j < tokens.length; j++) {
+                if (i !== j) {
+                    pairs.push({
+                        from: tokens[i],
+                        to: tokens[j],
+                        description: `Swap ${tokens[i]} for ${tokens[j]}`,
+                    });
+                }
+            }
+        }
+        return pairs;
+    }
+    static getSwapConfig() {
+        return SWAP_CONFIG;
     }
 }
 //# sourceMappingURL=swap.js.map

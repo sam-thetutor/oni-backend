@@ -1,6 +1,6 @@
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { Annotation, END, START, StateGraph, MessagesAnnotation, } from "@langchain/langgraph";
-import { ALL_TOOLS_LIST_WITH_INTELLIGENT, setCurrentUserId } from "./tools.js";
+import { ALL_TOOLS_LIST_WITH_INTELLIGENT, setCurrentUserFrontendWalletAddress } from "./tools.js";
 import { createLLM, printCostInfo } from "./config/llm.js";
 import { config } from "dotenv";
 config();
@@ -134,7 +134,7 @@ const shouldContinue = (state) => {
 };
 const customToolNode = async (state) => {
     const { messages, userId } = state;
-    setCurrentUserId(userId);
+    setCurrentUserFrontendWalletAddress(userId);
     const result = await toolNode.invoke(messages);
     console.log("Tool execution result:", JSON.stringify(result, null, 2));
     return { messages: result, userId };

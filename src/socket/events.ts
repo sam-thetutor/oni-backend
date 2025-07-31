@@ -62,12 +62,12 @@ export const setupSocketEvents = (io: Server) => {
     // Handle user stats refresh request
     socket.on('wallet:refresh:stats', async () => {
       try {
-        if (!socket.userId) {
-          socket.emit('error', { message: 'User ID not found' });
+        if (!socket.frontendWalletAddress) {
+          socket.emit('error', { message: 'Frontend wallet address not found' });
           return;
         }
 
-        const stats = await GamificationService.getUserStats(socket.userId);
+        const stats = await GamificationService.getUserStats(socket.frontendWalletAddress);
         socket.emit('wallet:stats:updated', {
           stats,
           timestamp: new Date().toISOString()

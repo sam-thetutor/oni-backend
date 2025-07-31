@@ -7,7 +7,7 @@ import {
   MessagesAnnotation,
 } from "@langchain/langgraph";
 import { BaseMessage, type AIMessage } from "@langchain/core/messages";
-import { ALL_TOOLS_LIST_WITH_INTELLIGENT, setCurrentUserId } from "./tools.js";
+import { ALL_TOOLS_LIST_WITH_INTELLIGENT, setCurrentUserFrontendWalletAddress } from "./tools.js";
 import { createLLM, printCostInfo, getCurrentProvider } from "./config/llm.js";
 import { config } from "dotenv";
 
@@ -184,7 +184,7 @@ const customToolNode = async (state: typeof GraphAnnotation.State) => {
   const { messages, userId } = state;
 
   // Set the current user ID for tools to access
-  setCurrentUserId(userId);
+      setCurrentUserFrontendWalletAddress(userId);
 
   // Execute tools
   const result = await toolNode.invoke(messages);

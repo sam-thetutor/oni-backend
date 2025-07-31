@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { config } from 'dotenv';
 import { User, IUser } from '../models/User.js';
 import { PrivyService } from './privy.js';
+import { WalletFundingService } from './wallet-funding.js';
 
 // Load environment variables
 config();
@@ -80,6 +81,17 @@ export class WalletService {
       });
 
       await user.save();
+      
+      // Automatically fund the new wallet
+      console.log(`🎉 New user created, funding wallet: ${walletInfo.address}`);
+      const fundingResult = await WalletFundingService.fundNewWallet(walletInfo.address);
+      
+      if (fundingResult.success) {
+        console.log(`✅ Wallet funded successfully! Transaction: ${fundingResult.transactionHash}`);
+      } else {
+        console.error(`❌ Failed to fund wallet: ${fundingResult.error}`);
+        // Don't throw error here - user can still use the app, just won't have initial funding
+      }
       
       return user;
     } catch (error) {

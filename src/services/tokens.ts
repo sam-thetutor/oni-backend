@@ -252,24 +252,41 @@ export class TokenService {
       });
     }
 
-    // Try to get tUSDC balance directly (skip verification for known tokens)
+    // Try to get USDC balance
     try {
-      
-      
       // Directly get the balance using our known token metadata
-      const tUSDCBalance = await this.getTokenBalance(TOKEN_ADDRESSES.tUSDC, walletAddress);
-      results.push(tUSDCBalance);
+      const usdcBalance = await this.getTokenBalance(TOKEN_ADDRESSES.USDC, walletAddress);
+      results.push(usdcBalance);
       
     } catch (error) {
-      console.error('❌ Failed to get tUSDC balance:', error);
-      // Add zero tUSDC balance as fallback with correct decimals
-      const tUSDCMetadata = TOKEN_METADATA.tUSDC;
+      console.error('❌ Failed to get USDC balance:', error);
+      // Add zero USDC balance as fallback with correct decimals
+      const usdcMetadata = TOKEN_METADATA.USDC;
       results.push({
         address: walletAddress,
         balance: '0',
         formatted: '0',
-        symbol: tUSDCMetadata.symbol,
-        decimals: tUSDCMetadata.decimals,
+        symbol: usdcMetadata.symbol,
+        decimals: usdcMetadata.decimals,
+      });
+    }
+
+    // Try to get USDT balance
+    try {
+      // Directly get the balance using our known token metadata
+      const usdtBalance = await this.getTokenBalance(TOKEN_ADDRESSES.USDT, walletAddress);
+      results.push(usdtBalance);
+      
+    } catch (error) {
+      console.error('❌ Failed to get USDT balance:', error);
+      // Add zero USDT balance as fallback with correct decimals
+      const usdtMetadata = TOKEN_METADATA.USDT;
+      results.push({
+        address: walletAddress,
+        balance: '0',
+        formatted: '0',
+        symbol: usdtMetadata.symbol,
+        decimals: usdtMetadata.decimals,
       });
     }
 

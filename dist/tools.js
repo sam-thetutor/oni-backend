@@ -1,6 +1,6 @@
 import { StructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { WalletService } from "./services/wallet.js";
+import { MongoDBService } from "./services/mongodb.js";
 import { BlockchainService } from "./services/blockchain.js";
 import { GamificationService } from "./services/gamification.js";
 import { User } from "./models/User.js";
@@ -10,6 +10,8 @@ import { PaymentLinkService } from "./services/paymentlinks.js";
 import { ContractReadService } from "./services/contractread.js";
 import { CRYPTO_ASSISTANT_TOOLS } from "./tools/crypto-assistant.js";
 import { SwapService } from "./services/swap.js";
+import { TokenService } from "./services/tokens.js";
+import { TOKEN_ADDRESSES } from "./constants/tokens.js";
 import { getIO } from "./socket/index.js";
 import { emitBalanceUpdate, emitNewTransaction, emitPointsEarned, emitTransactionSuccess } from "./socket/events.js";
 import dotenv from 'dotenv';
@@ -17,9 +19,9 @@ import { IntelligentTool } from "./tools/intelligentTool.js";
 dotenv.config();
 import { XFIPriceChartTool, XFIMarketDataTool, XFITradingSignalsTool, XFIPricePredictionTool, XFIMarketComparisonTool } from './tools/price-analysis.js';
 import { createDCAOrder, getUserDCAOrders, cancelDCAOrder, getDCAOrderStatus, getSwapQuote, getDCASystemStatus, getUserTokenBalances } from './tools/dca.js';
-let currentUserId = null;
-export const setCurrentUserId = (userId) => {
-    currentUserId = userId;
+let currentUserFrontendWalletAddress = null;
+export const setCurrentUserFrontendWalletAddress = (frontendWalletAddress) => {
+    currentUserFrontendWalletAddress = frontendWalletAddress;
 };
 class GetWalletInfoTool extends StructuredTool {
     name = "get_wallet_info";
@@ -27,14 +29,14 @@ class GetWalletInfoTool extends StructuredTool {
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
-                    error: 'User ID not found. Please try again.'
+                    error: 'User wallet address not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -62,21 +64,21 @@ class GetWalletForOperationsTool extends StructuredTool {
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
-                    error: 'User ID not found. Please try again.'
+                    error: 'User wallet address not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
                     error: 'User wallet not found in database'
                 });
             }
-            const walletForOps = await WalletService.getWalletForOperations(user.privyId);
+            const walletForOps = await MongoDBService.getWalletForOperations(frontendWalletAddress);
             if (!walletForOps) {
                 return JSON.stringify({
                     success: false,
@@ -105,14 +107,14 @@ class GetBalanceTool extends StructuredTool {
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
-                    error: 'User ID not found. Please try again.'
+                    error: 'User wallet address not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -165,11 +167,11 @@ class SendTransactionTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { to, amount, data } = input;
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
-                    error: 'User ID not found. Please try again.'
+                    error: 'User wallet address not found. Please try again.'
                 });
             }
             if (!BlockchainService.isValidAddress(to)) {
@@ -178,14 +180,21 @@ class SendTransactionTool extends StructuredTool {
                     error: 'Invalid recipient address format'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
                     error: 'User wallet not found in database'
                 });
             }
-            const transaction = await BlockchainService.sendTransaction(user, to, amount, data);
+            const userModel = await User.findOne({ frontendWalletAddress });
+            if (!userModel) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User not found in database'
+                });
+            }
+            const transaction = await BlockchainService.sendTransaction(userModel, to, amount, data);
             const response = {
                 success: true,
                 transactionHash: transaction.hash,
@@ -254,6 +263,128 @@ class SendTransactionTool extends StructuredTool {
         }
     }
 }
+class SendTokenTool extends StructuredTool {
+    name = "send_token";
+    description = "Sends USDT or USDC tokens from the user's wallet to another address. Use this when user says 'send USDT', 'transfer USDC', 'send 10 USDT to address', etc.";
+    schema = z.object({
+        token: z.enum(["USDT", "USDC"]).describe("The token to send (USDT or USDC)"),
+        to: z.string().describe("The recipient wallet address"),
+        amount: z.string().describe("The amount to send (e.g., '10.5')")
+    });
+    async _call(input, runManager) {
+        try {
+            const { token, to, amount } = input;
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User wallet address not found. Please try again.'
+                });
+            }
+            if (!BlockchainService.isValidAddress(to)) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'Invalid recipient address format'
+                });
+            }
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+            if (!user) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User wallet not found in database'
+                });
+            }
+            const userModel = await User.findOne({ frontendWalletAddress });
+            if (!userModel) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User not found in database'
+                });
+            }
+            const tokenAddress = TOKEN_ADDRESSES[token];
+            if (!tokenAddress) {
+                return JSON.stringify({
+                    success: false,
+                    error: `Token ${token} not supported`
+                });
+            }
+            const validation = await TokenService.validateSufficientBalance(tokenAddress, user.walletAddress, amount);
+            if (!validation.sufficient) {
+                return JSON.stringify({
+                    success: false,
+                    error: `Insufficient ${token} balance. Required: ${amount}, Available: ${validation.balance}`,
+                    balance: validation.balance,
+                    required: validation.required
+                });
+            }
+            const result = await TokenService.transferToken(userModel, tokenAddress, to, amount);
+            if (!result.success) {
+                return JSON.stringify({
+                    success: false,
+                    error: result.error || 'Token transfer failed'
+                });
+            }
+            const response = {
+                success: true,
+                transactionHash: result.transactionHash,
+                from: user.walletAddress,
+                to: to,
+                token: token,
+                amount: amount,
+                status: 'success',
+                message: `${amount} ${token} sent successfully`,
+                explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${result.transactionHash}`
+            };
+            try {
+                const io = getIO();
+                emitTransactionSuccess(io, user.walletAddress, {
+                    transactionHash: result.transactionHash,
+                    from: user.walletAddress,
+                    to: to,
+                    value: `${amount} ${token}`,
+                    status: 'success',
+                    explorerUrl: response.explorerUrl
+                });
+                emitNewTransaction(io, user.walletAddress, {
+                    hash: result.transactionHash,
+                    from: user.walletAddress,
+                    to: to,
+                    value: `${amount} ${token}`,
+                    status: 'success',
+                    timestamp: new Date().toISOString()
+                });
+                setTimeout(async () => {
+                    try {
+                        const balances = await TokenService.getDCATokenBalances(user.walletAddress);
+                        const tokenBalance = balances.find(b => b.symbol === token);
+                        if (tokenBalance) {
+                            emitBalanceUpdate(io, user.walletAddress, {
+                                address: user.walletAddress,
+                                balance: tokenBalance.balance,
+                                formatted: tokenBalance.formatted,
+                                symbol: token
+                            });
+                        }
+                    }
+                    catch (balanceError) {
+                        console.error('Error fetching updated balance:', balanceError);
+                    }
+                }, 1000);
+            }
+            catch (socketError) {
+                console.error('Error emitting real-time events:', socketError);
+            }
+            return JSON.stringify(response);
+        }
+        catch (error) {
+            console.error('Error in send_token:', error);
+            return JSON.stringify({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+}
 class GetTransactionHistoryTool extends StructuredTool {
     name = "get_transaction_history";
     description = "Gets transaction history for the user's wallet";
@@ -263,14 +394,14 @@ class GetTransactionHistoryTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { limit = 10 } = input;
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
                     error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -311,21 +442,21 @@ class GetUserStatsTool extends StructuredTool {
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
                     error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
                     error: 'User wallet not found in database'
                 });
             }
-            const stats = await GamificationService.getUserStats(user.privyId);
+            const stats = await GamificationService.getUserStats(frontendWalletAddress);
             if (!stats) {
                 return JSON.stringify({
                     success: false,
@@ -373,11 +504,11 @@ class GetLeaderboardTool extends StructuredTool {
             const { limit = 10 } = input;
             const leaderboard = await GamificationService.getLeaderboard(limit);
             let userPosition = null;
-            const privyId = currentUserId;
-            if (privyId) {
-                const user = await WalletService.getWalletByPrivyId(privyId);
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (frontendWalletAddress) {
+                const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
                 if (user) {
-                    userPosition = await GamificationService.getUserLeaderboardPosition(user.privyId);
+                    userPosition = await GamificationService.getUserLeaderboardPosition(frontendWalletAddress);
                 }
             }
             return JSON.stringify({
@@ -414,11 +545,11 @@ class SetUsernameTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { username } = input;
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({ success: false, error: 'User ID not found. Please try again.' });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({ success: false, error: 'User wallet not found in database' });
             }
@@ -426,11 +557,14 @@ class SetUsernameTool extends StructuredTool {
                 return JSON.stringify({ success: false, error: 'Invalid username. Must be 3-20 characters, alphanumeric or underscores.' });
             }
             const existing = await User.findOne({ username: username });
-            if (existing && existing.privyId !== user.privyId) {
+            if (existing && existing.frontendWalletAddress !== frontendWalletAddress) {
                 return JSON.stringify({ success: false, error: 'Username already taken' });
             }
-            user.username = username;
-            await user.save();
+            const userModel = await User.findOne({ frontendWalletAddress });
+            if (userModel) {
+                userModel.username = username;
+                await userModel.save();
+            }
             return JSON.stringify({ success: true, username });
         }
         catch (error) {
@@ -445,14 +579,14 @@ class CreateGlobalPaymentLinkTool extends StructuredTool {
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
                     error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -460,7 +594,7 @@ class CreateGlobalPaymentLinkTool extends StructuredTool {
                 });
             }
             const globalLinkID = nanoid(10);
-            const walletForOps = await WalletService.getWalletForOperations(user.privyId);
+            const walletForOps = await MongoDBService.getWalletForOperations(frontendWalletAddress);
             if (!walletForOps) {
                 return JSON.stringify({
                     success: false,
@@ -468,7 +602,7 @@ class CreateGlobalPaymentLinkTool extends StructuredTool {
                 });
             }
             const transactionHash = await PaymentLinkService.createGlobalPaymentLinkOnChain(walletForOps.privateKey, globalLinkID);
-            const paymentLink = await PaymentLinkService.createGlobalPaymentLink(user.privyId, globalLinkID);
+            const paymentLink = await PaymentLinkService.createGlobalPaymentLink(frontendWalletAddress, globalLinkID);
             return JSON.stringify({
                 success: true,
                 linkID: globalLinkID,
@@ -500,14 +634,14 @@ class CreatePaymentLinksTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { amount } = input;
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
                     error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -515,7 +649,7 @@ class CreatePaymentLinksTool extends StructuredTool {
                 });
             }
             const paymentLinkID = nanoid(10);
-            const walletForOps = await WalletService.getWalletForOperations(user.privyId);
+            const walletForOps = await MongoDBService.getWalletForOperations(frontendWalletAddress);
             if (!walletForOps) {
                 return JSON.stringify({
                     success: false,
@@ -525,7 +659,7 @@ class CreatePaymentLinksTool extends StructuredTool {
             const isGlobal = !amount || amount.trim() === '';
             if (isGlobal) {
                 const transactionHash = await PaymentLinkService.createGlobalPaymentLinkOnChain(walletForOps.privateKey, paymentLinkID);
-                const paymentLink = await PaymentLinkService.createGlobalPaymentLink(user.privyId, paymentLinkID);
+                const paymentLink = await PaymentLinkService.createGlobalPaymentLink(frontendWalletAddress, paymentLinkID);
                 return JSON.stringify({
                     success: true,
                     linkID: paymentLinkID,
@@ -541,7 +675,7 @@ class CreatePaymentLinksTool extends StructuredTool {
             }
             else {
                 const transactionHash = await PaymentLinkService.createPaymentLinkOnChain(walletForOps.privateKey, paymentLinkID, amount);
-                const paymentLink = await PaymentLinkService.createPaymentLink(user.privyId, Number(amount), paymentLinkID);
+                const paymentLink = await PaymentLinkService.createPaymentLink(frontendWalletAddress, Number(amount), paymentLinkID);
                 return JSON.stringify({
                     success: true,
                     linkID: paymentLinkID,
@@ -575,14 +709,14 @@ class PayFixedPaymentLinkTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { linkId } = input;
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
                     error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -602,7 +736,7 @@ class PayFixedPaymentLinkTool extends StructuredTool {
                     error: 'Payment link is no longer active'
                 });
             }
-            const walletForOps = await WalletService.getWalletForOperations(user.privyId);
+            const walletForOps = await MongoDBService.getWalletForOperations(frontendWalletAddress);
             if (!walletForOps) {
                 return JSON.stringify({
                     success: false,
@@ -685,14 +819,14 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
     async _call(input, runManager) {
         try {
             const { linkId, amount } = input;
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
                     error: 'User ID not found. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
@@ -707,7 +841,7 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
                     error: `Global payment link '${linkId}' does not exist. Please verify the link ID.`
                 });
             }
-            const walletForOps = await WalletService.getWalletForOperations(user.privyId);
+            const walletForOps = await MongoDBService.getWalletForOperations(frontendWalletAddress);
             if (!walletForOps) {
                 return JSON.stringify({
                     success: false,
@@ -853,7 +987,7 @@ class CheckPaymentLinkStatusTool extends StructuredTool {
 }
 class CreateDCAOrderTool extends StructuredTool {
     name = "create_dca_order";
-    description = "Creates an automated DCA (Dollar Cost Averaging) order to buy or sell XFI when the price reaches a trigger condition. Users can say things like 'buy 10 tUSDC when XFI hits $0.05' or 'sell 5 XFI if price drops below $0.04'";
+    description = "Creates an automated DCA (Dollar Cost Averaging) order to buy or sell XFI when the price reaches a trigger condition. Users can say things like 'buy 10 USDC when XFI hits $0.05' or 'sell 5 XFI if price drops below $0.04'";
     schema = z.object({
         orderType: z.enum(["buy", "sell"]).describe("Order type: 'buy' or 'sell'"),
         amount: z.string().describe("Amount to buy or sell"),
@@ -864,8 +998,8 @@ class CreateDCAOrderTool extends StructuredTool {
     });
     async _call(input, runManager) {
         try {
-            const userId = currentUserId;
-            if (!userId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
             }
             const { orderType, amount, triggerPrice, triggerCondition, slippage, expirationDays } = input;
@@ -873,7 +1007,7 @@ class CreateDCAOrderTool extends StructuredTool {
                 return JSON.stringify({ success: false, error: 'Missing required DCA order fields.' });
             }
             const params = {
-                userId,
+                userId: frontendWalletAddress,
                 orderType,
                 amount,
                 triggerPrice,
@@ -899,15 +1033,15 @@ class GetUserDCAOrdersTool extends StructuredTool {
     });
     async _call(input, runManager) {
         try {
-            const userId = currentUserId;
-            if (!userId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
                     error: 'User not authenticated. Please try again.'
                 });
             }
             const result = await getUserDCAOrders({
-                userId,
+                userId: frontendWalletAddress,
                 ...input
             });
             return JSON.stringify(result);
@@ -929,15 +1063,15 @@ class CancelDCAOrderTool extends StructuredTool {
     });
     async _call(input, runManager) {
         try {
-            const userId = currentUserId;
-            if (!userId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
             }
             const { orderId } = input;
             if (!orderId) {
                 return JSON.stringify({ success: false, error: 'Missing required orderId.' });
             }
-            const params = { userId, orderId };
+            const params = { userId: frontendWalletAddress, orderId };
             const result = await cancelDCAOrder(params);
             return JSON.stringify(result);
         }
@@ -955,15 +1089,15 @@ class GetDCAOrderStatusTool extends StructuredTool {
     });
     async _call(input, runManager) {
         try {
-            const userId = currentUserId;
-            if (!userId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
             }
             const { orderId } = input;
             if (!orderId) {
                 return JSON.stringify({ success: false, error: 'Missing required orderId.' });
             }
-            const params = { userId, orderId };
+            const params = { userId: frontendWalletAddress, orderId };
             const result = await getDCAOrderStatus(params);
             return JSON.stringify(result);
         }
@@ -975,12 +1109,12 @@ class GetDCAOrderStatusTool extends StructuredTool {
 }
 class GetSwapQuoteTool extends StructuredTool {
     name = "get_swap_quote";
-    description = "Gets a quote for an immediate token swap between XFI and tUSDC";
+    description = "Gets a quote/estimate for a token swap WITHOUT executing it. Use this when user asks for 'quote', 'estimate', 'how much will I get', or 'check price'. DO NOT use this when user says 'swap', 'execute', 'trade', or 'now swap'. Working pairs include: XFI↔USDT, XFI↔USDC, WXFI↔FOMO, WXFI↔WETH, WXFI↔USDC, WXFI↔WBTC, WXFI↔USDT, WXFI↔BNB, WXFI↔SOL, WXFI↔XUSD, USDC↔XUSD, USDT↔XUSD";
     schema = z.object({
-        fromToken: z.enum(["XFI", "tUSDC"]).describe("Token to swap from"),
-        toToken: z.enum(["XFI", "tUSDC"]).describe("Token to swap to"),
+        fromToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "USDT", "BNB", "SOL", "XUSD"]).describe("Token to swap from"),
+        toToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "USDT", "BNB", "SOL", "XUSD"]).describe("Token to swap to"),
         amount: z.string().describe("Amount to swap"),
-        slippage: z.number().optional().describe("Maximum slippage percentage (default: 5%)")
+        slippage: z.union([z.number(), z.string()]).optional().describe("Maximum slippage percentage (default: 5%). Can be a number or string.")
     });
     async _call(input, runManager) {
         try {
@@ -988,15 +1122,35 @@ class GetSwapQuoteTool extends StructuredTool {
             if (!fromToken || !toToken || !amount) {
                 return JSON.stringify({ success: false, error: 'Missing required swap quote fields.' });
             }
+            let slippageNumber = undefined;
+            if (slippage !== undefined) {
+                slippageNumber = typeof slippage === 'string' ? parseFloat(slippage) : slippage;
+                if (isNaN(slippageNumber)) {
+                    return JSON.stringify({ success: false, error: 'Invalid slippage value. Must be a number.' });
+                }
+            }
+            const mappedFromToken = fromToken === 'XFI' ? 'CFI' : fromToken;
+            const mappedToToken = toToken === 'XFI' ? 'CFI' : toToken;
             const params = {
-                fromToken,
-                toToken,
+                fromToken: mappedFromToken,
+                toToken: mappedToToken,
                 amount
             };
-            if (slippage !== undefined) {
-                params.slippage = slippage;
+            if (slippageNumber !== undefined) {
+                params.slippage = slippageNumber;
             }
             const result = await getSwapQuote(params);
+            if (!result.success && result.message.includes('getAmountsOut') && result.message.includes('reverted')) {
+                const workingPairs = [
+                    'WXFI ↔ FOMO', 'WXFI ↔ WETH', 'WXFI ↔ USDC', 'WXFI ↔ WBTC',
+                    'WXFI ↔ USDT', 'WXFI ↔ BNB', 'WXFI ↔ SOL', 'WXFI ↔ XUSD',
+                    'USDC ↔ XUSD', 'USDT ↔ XUSD'
+                ];
+                return JSON.stringify({
+                    success: false,
+                    message: `No liquidity pool found for ${params.fromToken} to ${params.toToken}. Most tokens need to be swapped through WXFI as an intermediary. Working pairs: ${workingPairs.join(', ')}. Try swapping ${params.fromToken} to WXFI first, then WXFI to ${params.toToken}.`
+                });
+            }
             return JSON.stringify(result);
         }
         catch (error) {
@@ -1025,18 +1179,18 @@ class GetDCASystemStatusTool extends StructuredTool {
 }
 class GetUserTokenBalancesTool extends StructuredTool {
     name = "get_user_token_balances";
-    description = "Gets the user's current balances for DCA-supported tokens (XFI and tUSDC)";
+    description = "Gets the user's current balances for DCA-supported tokens (XFI, USDC, and USDT)";
     schema = z.object({});
     async _call(input, runManager) {
         try {
-            const userId = currentUserId;
-            if (!userId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
                     error: 'User not authenticated. Please try again.'
                 });
             }
-            const result = await getUserTokenBalances({ userId });
+            const result = await getUserTokenBalances({ userId: frontendWalletAddress });
             return JSON.stringify(result);
         }
         catch (error) {
@@ -1050,46 +1204,142 @@ class GetUserTokenBalancesTool extends StructuredTool {
 }
 class AddLiquidityTool extends StructuredTool {
     name = "add_liquidity";
-    description = "Adds liquidity to the XFI/tUSDC swap pool. Both XFI and tUSDC amounts are required to maintain the pool balance.";
+    description = "Adds liquidity to the XFI/USDC swap pool. Both XFI and USDC amounts are required to maintain the pool balance.";
     schema = z.object({
         xfiAmount: z.string().describe("Amount of XFI to add to the pool"),
-        tUSDCAmount: z.string().describe("Amount of tUSDC to add to the pool"),
+        usdcAmount: z.string().describe("Amount of USDC to add to the pool"),
         slippage: z.number().optional().describe("Maximum slippage percentage (default: 5%)")
     });
     async _call(input, runManager) {
         try {
-            const privyId = currentUserId;
-            if (!privyId) {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
                 return JSON.stringify({
                     success: false,
                     error: 'User not authenticated. Please try again.'
                 });
             }
-            const user = await WalletService.getWalletByPrivyId(privyId);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
             if (!user) {
                 return JSON.stringify({
                     success: false,
                     error: 'User wallet not found in database'
                 });
             }
-            const { xfiAmount, tUSDCAmount, slippage = 5 } = input;
-            const result = await SwapService.addLiquidity(user, xfiAmount, tUSDCAmount, slippage);
-            if (result.success) {
+            const { xfiAmount, usdcAmount, slippage = 5 } = input;
+            const userModel = await User.findOne({ frontendWalletAddress });
+            if (!userModel) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User not found in database'
+                });
+            }
+            return JSON.stringify({
+                success: false,
+                error: 'Add liquidity functionality is not currently available'
+            });
+        }
+        catch (error) {
+            console.error('Error in add_liquidity:', error);
+            return JSON.stringify({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+}
+class ExecuteSwapTool extends StructuredTool {
+    name = "execute_swap";
+    description = "ACTUALLY EXECUTES a token swap on the blockchain. Use this when user says 'swap', 'execute', 'trade', 'now swap', 'perform swap', or 'do the swap'. This will create a real transaction. Working pairs include: XFI↔USDT, XFI↔USDC, WXFI↔FOMO, WXFI↔WETH, WXFI↔USDC, WXFI↔WBTC, WXFI↔USDT, WXFI↔BNB, WXFI↔SOL, WXFI↔XUSD, USDC↔XUSD, USDT↔XUSD";
+    schema = z.object({
+        fromToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "USDT", "BNB", "SOL", "XUSD"]).describe("Token to swap from"),
+        toToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "USDT", "BNB", "SOL", "XUSD"]).describe("Token to swap to"),
+        fromAmount: z.string().describe("Amount of fromToken to swap"),
+        slippage: z.union([z.number(), z.string()]).optional().describe("Maximum slippage percentage (default: 5%). Can be a number or string.")
+    });
+    async _call(input, runManager) {
+        try {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User not authenticated. Please try again.'
+                });
+            }
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+            if (!user) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User wallet not found in database'
+                });
+            }
+            const { fromToken, toToken, fromAmount, slippage } = input;
+            let slippageNumber = 5;
+            if (slippage !== undefined) {
+                slippageNumber = typeof slippage === 'string' ? parseFloat(slippage) : slippage;
+                if (isNaN(slippageNumber)) {
+                    return JSON.stringify({ success: false, error: 'Invalid slippage value. Must be a number.' });
+                }
+            }
+            const mappedFromToken = fromToken === 'XFI' ? 'CFI' : fromToken;
+            const mappedToToken = toToken === 'XFI' ? 'CFI' : toToken;
+            if (mappedFromToken === mappedToToken) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'Cannot swap a token for itself. Please choose different tokens.'
+                });
+            }
+            const userModel = await User.findOne({ frontendWalletAddress });
+            if (!userModel) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User not found in database'
+                });
+            }
+            const quote = await SwapService.getSwapQuote({
+                fromToken: mappedFromToken,
+                toToken: mappedToToken,
+                fromAmount,
+                slippage: slippageNumber
+            });
+            const validation = await SwapService.validateSwap(userModel, {
+                fromToken: mappedFromToken,
+                toToken: mappedToToken,
+                fromAmount,
+                slippage: slippageNumber
+            });
+            if (!validation.valid) {
+                return JSON.stringify({
+                    success: false,
+                    error: validation.error || 'Swap validation failed',
+                    warnings: validation.warnings,
+                    balance: validation.balance,
+                    allowance: validation.allowance,
+                    needsApproval: validation.needsApproval
+                });
+            }
+            const swapResult = await SwapService.executeSwap(userModel, {
+                fromToken: mappedFromToken,
+                toToken: mappedToToken,
+                fromAmount,
+                slippage: slippageNumber
+            });
+            if (swapResult.success) {
                 try {
                     const io = getIO();
                     emitTransactionSuccess(io, user.walletAddress, {
-                        transactionHash: result.transactionHash,
+                        transactionHash: swapResult.transactionHash,
                         from: user.walletAddress,
-                        to: 'Liquidity Pool',
-                        value: `${xfiAmount} XFI + ${tUSDCAmount} tUSDC`,
+                        to: 'Swap Contract',
+                        value: `${fromAmount} ${fromToken} → ${swapResult.toAmount} ${toToken}`,
                         status: 'success',
-                        explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${result.transactionHash}`
+                        explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${swapResult.transactionHash}`
                     });
                     emitNewTransaction(io, user.walletAddress, {
-                        hash: result.transactionHash,
+                        hash: swapResult.transactionHash,
                         from: user.walletAddress,
-                        to: 'Liquidity Pool',
-                        value: `${xfiAmount} XFI + ${tUSDCAmount} tUSDC`,
+                        to: 'Swap Contract',
+                        value: `${fromAmount} ${fromToken} → ${swapResult.toAmount} ${toToken}`,
                         status: 'success',
                         timestamp: new Date().toISOString()
                     });
@@ -1113,22 +1363,61 @@ class AddLiquidityTool extends StructuredTool {
                 }
                 return JSON.stringify({
                     success: true,
-                    message: `✅ Successfully added ${xfiAmount} XFI + ${tUSDCAmount} tUSDC to the liquidity pool!`,
-                    transactionHash: result.transactionHash,
-                    xfiAmount,
-                    tUSDCAmount,
-                    slippage
+                    transactionHash: swapResult.transactionHash,
+                    fromToken,
+                    toToken,
+                    fromAmount,
+                    toAmount: swapResult.toAmount,
+                    gasUsed: swapResult.gasUsed,
+                    gasPrice: swapResult.gasPrice,
+                    explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${swapResult.transactionHash}`,
+                    message: `Successfully swapped ${fromAmount} ${fromToken} for ${swapResult.toAmount} ${toToken}`
                 });
             }
             else {
                 return JSON.stringify({
                     success: false,
-                    error: result.error || 'Failed to add liquidity'
+                    error: swapResult.error || 'Swap execution failed',
+                    errorCode: swapResult.errorCode
                 });
             }
         }
         catch (error) {
-            console.error('Error in add_liquidity:', error);
+            console.error('Error in execute_swap:', error);
+            return JSON.stringify({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+}
+class GetSupportedSwapTokensTool extends StructuredTool {
+    name = "get_supported_swap_tokens";
+    description = "Gets the list of supported tokens for swapping";
+    schema = z.object({});
+    async _call(input, runManager) {
+        try {
+            const supportedTokens = SwapService.getSupportedPairs();
+            const swapConfig = SwapService.getSwapConfig();
+            return JSON.stringify({
+                success: true,
+                supportedTokens: swapConfig.SUPPORTED_TOKENS,
+                tradingPairs: supportedTokens.map(pair => ({
+                    from: pair.from,
+                    to: pair.to,
+                    description: pair.description
+                })),
+                totalPairs: supportedTokens.length,
+                config: {
+                    defaultSlippage: swapConfig.DEFAULT_SLIPPAGE,
+                    minSlippage: swapConfig.MIN_SLIPPAGE,
+                    maxSlippage: swapConfig.MAX_SLIPPAGE,
+                    deadlineMinutes: swapConfig.DEADLINE_MINUTES
+                }
+            });
+        }
+        catch (error) {
+            console.error('Error in get_supported_swap_tokens:', error);
             return JSON.stringify({
                 success: false,
                 error: error.message
@@ -1141,6 +1430,7 @@ export const ALL_TOOLS_LIST = [
     new GetWalletForOperationsTool(),
     new GetBalanceTool(),
     new SendTransactionTool(),
+    new SendTokenTool(),
     new GetTransactionHistoryTool(),
     new GetUserStatsTool(),
     new GetLeaderboardTool(),
@@ -1163,6 +1453,8 @@ export const ALL_TOOLS_LIST = [
     new GetSwapQuoteTool(),
     new GetDCASystemStatusTool(),
     new GetUserTokenBalancesTool(),
+    new ExecuteSwapTool(),
+    new GetSupportedSwapTokensTool(),
     new AddLiquidityTool(),
 ];
 const intelligentTool = new IntelligentTool(ALL_TOOLS_LIST);

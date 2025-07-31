@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { PaymentLink } from '../models/PaymentLink.js';
+import { WalletFundingService } from '../services/wallet-funding.js';
 const router = express.Router();
 router.get('/', authenticateToken, async (req, res) => {
     try {
@@ -42,6 +43,38 @@ router.get('/paylink/:linkId', async (req, res) => {
             success: false,
             error: 'Internal server error'
         });
+    }
+});
+router.get('/funding-status', authenticateToken, async (req, res) => {
+    try {
+        const dbUser = req.user?.dbUser;
+        if (!dbUser || !dbUser.walletAddress) {
+            return res.status(404).json({ error: 'No Oni wallet found for user' });
+        }
+        const hasBeenFunded = await WalletFundingService.checkWalletFunding(dbUser.walletAddress);
+        res.json({
+            hasBeenFunded,
+            walletAddress: dbUser.walletAddress
+        });
+    }
+    catch (error) {
+        console.error('Error checking funding status:', error);
+        res.status(500).json({ error: 'Failed to check funding status' });
+    }
+});
+router.get('/funding-wallet', async (req, res) => {
+    try {
+        const fundingAddress = WalletFundingService.getFundingWalletAddress();
+        const fundingBalance = await WalletFundingService.getFundingWalletBalance();
+        res.json({
+            fundingAddress,
+            fundingBalance,
+            fundingAmount: '0.01'
+        });
+    }
+    catch (error) {
+        console.error('Error getting funding wallet info:', error);
+        res.status(500).json({ error: 'Failed to get funding wallet info' });
     }
 });
 export default router;

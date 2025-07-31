@@ -2,16 +2,16 @@ import { DCAService } from '../services/dca.js';
 import { DCA_LIMITS } from '../constants/tokens.js';
 const rateLimitStore = new Map();
 export const rateLimitDCAOrders = (req, res, next) => {
-    const userId = req.user?.id;
-    if (!userId) {
+    const frontendWalletAddress = req.user?.frontendWalletAddress;
+    if (!frontendWalletAddress) {
         return res.status(401).json({ error: 'User not authenticated' });
     }
     const now = Date.now();
     const windowMs = 60 * 1000;
     const maxRequests = 5;
-    const userLimit = rateLimitStore.get(userId);
+    const userLimit = rateLimitStore.get(frontendWalletAddress);
     if (!userLimit || now > userLimit.resetTime) {
-        rateLimitStore.set(userId, { count: 1, resetTime: now + windowMs });
+        rateLimitStore.set(frontendWalletAddress, { count: 1, resetTime: now + windowMs });
         return next();
     }
     if (userLimit.count >= maxRequests) {
@@ -25,11 +25,11 @@ export const rateLimitDCAOrders = (req, res, next) => {
 };
 export const checkMaxActiveOrders = async (req, res, next) => {
     try {
-        const userId = req.user?.id;
-        if (!userId) {
+        const frontendWalletAddress = req.user?.frontendWalletAddress;
+        if (!frontendWalletAddress) {
             return res.status(401).json({ error: 'User not authenticated' });
         }
-        const activeOrders = await DCAService.getUserDCAOrders(userId, 'active');
+        const activeOrders = await DCAService.getUserDCAOrders(frontendWalletAddress, 'active');
         if (activeOrders.length >= DCA_LIMITS.MAX_ORDERS_PER_USER) {
             return res.status(400).json({
                 error: `Maximum of ${DCA_LIMITS.MAX_ORDERS_PER_USER} active DCA orders allowed per user`,
@@ -46,14 +46,14 @@ export const checkMaxActiveOrders = async (req, res, next) => {
 export const validateOrderBalance = async (req, res, next) => {
     try {
         const { orderType, amount } = req.body;
-        const userId = req.user?.id;
-        if (!userId) {
+        const frontendWalletAddress = req.user?.frontendWalletAddress;
+        if (!frontendWalletAddress) {
             return res.status(401).json({ error: 'User not authenticated' });
         }
-        const { WalletService } = await import('../services/wallet.js');
+        const { MongoDBService } = await import('../services/mongodb.js');
         const { TokenService } = await import('../services/tokens.js');
         const { TOKEN_METADATA } = await import('../constants/tokens.js');
-        const user = await WalletService.getWalletByPrivyId(userId);
+        const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
         if (!user) {
             return res.status(404).json({ error: 'User wallet not found' });
         }
@@ -80,11 +80,11 @@ export const validateOrderBalance = async (req, res, next) => {
 export const validateOrderOwnership = async (req, res, next) => {
     try {
         const { orderId } = req.params;
-        const userId = req.user?.id;
-        if (!userId) {
+        const frontendWalletAddress = req.user?.frontendWalletAddress;
+        if (!frontendWalletAddress) {
             return res.status(401).json({ error: 'User not authenticated' });
         }
-        const order = await DCAService.getDCAOrderById(orderId, userId);
+        const order = await DCAService.getDCAOrderById(orderId, frontendWalletAddress);
         if (!order) {
             return res.status(404).json({ error: 'DCA order not found or access denied' });
         }

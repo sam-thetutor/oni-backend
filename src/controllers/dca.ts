@@ -2,8 +2,8 @@ import { Request, Response } from 'express';
 import { DCAService, CreateDCAOrderParams } from '../services/dca.js';
 import { PriceMonitorService } from '../services/price-monitor.js';
 import { DCAExecutorService } from '../services/dca-executor.js';
-import { SwapService } from '../services/swap.js';
 import { WalletService } from '../services/wallet.js';
+import { MongoDBService } from '../services/mongodb.js';
 import { validateTriggerPrice, validateSlippage, DCA_LIMITS } from '../constants/tokens.js';
 import { AuthenticatedRequest } from '../middleware/auth.js';
 import { TokenService } from '../services/tokens.js';
@@ -16,9 +16,9 @@ export class DCAController {
   static async createOrder(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { orderType, amount, triggerPrice, triggerCondition, slippage, expirationDays } = req.body;
-      const userId = req.user?.id;
+      const frontendWalletAddress = req.user?.frontendWalletAddress;
 
-      if (!userId) {
+      if (!frontendWalletAddress) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
@@ -60,7 +60,7 @@ export class DCAController {
       }
 
       // Get user wallet
-      const user = await WalletService.getWalletByPrivyId(userId);
+      const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
       if (!user) {
         res.status(404).json({ error: 'User wallet not found' });
         return;
@@ -73,7 +73,7 @@ export class DCAController {
 
       // Create DCA order parameters
       const dcaParams: CreateDCAOrderParams = {
-        userId,
+        userId: frontendWalletAddress,
         walletAddress: user.walletAddress,
         orderType,
         fromAmount: amount.toString(),
@@ -115,16 +115,16 @@ export class DCAController {
    */
   static async getUserOrders(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
+      const frontendWalletAddress = req.user?.frontendWalletAddress;
       const { status, limit } = req.query;
 
-      if (!userId) {
+      if (!frontendWalletAddress) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
       const orders = await DCAService.getUserDCAOrders(
-        userId,
+        frontendWalletAddress,
         status as string,
         limit ? parseInt(limit as string) : undefined
       );
@@ -150,14 +150,14 @@ export class DCAController {
   static async getOrderById(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { orderId } = req.params;
-      const userId = req.user?.id;
+      const frontendWalletAddress = req.user?.frontendWalletAddress;
 
-      if (!userId) {
+      if (!frontendWalletAddress) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
-      const order = await DCAService.getDCAOrderById(orderId, userId);
+      const order = await DCAService.getDCAOrderById(orderId, frontendWalletAddress);
 
       if (!order) {
         res.status(404).json({ error: 'DCA order not found' });
@@ -184,10 +184,10 @@ export class DCAController {
   static async updateOrder(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { orderId } = req.params;
-      const userId = req.user?.id;
+      const frontendWalletAddress = req.user?.frontendWalletAddress;
       const updates = req.body;
 
-      if (!userId) {
+      if (!frontendWalletAddress) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
@@ -207,7 +207,7 @@ export class DCAController {
         return;
       }
 
-      const updatedOrder = await DCAService.updateDCAOrder(orderId, userId, updates);
+      const updatedOrder = await DCAService.updateDCAOrder(orderId, frontendWalletAddress, updates);
 
       res.json({
         success: true,
@@ -230,14 +230,14 @@ export class DCAController {
   static async cancelOrder(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { orderId } = req.params;
-      const userId = req.user?.id;
+      const frontendWalletAddress = req.user?.frontendWalletAddress;
 
-      if (!userId) {
+      if (!frontendWalletAddress) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
-      const cancelled = await DCAService.cancelDCAOrder(orderId, userId);
+      const cancelled = await DCAService.cancelDCAOrder(orderId, frontendWalletAddress);
 
       if (!cancelled) {
         res.status(404).json({ error: 'DCA order not found or cannot be cancelled' });
@@ -263,14 +263,14 @@ export class DCAController {
    */
   static async getUserStats(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
+      const frontendWalletAddress = req.user?.frontendWalletAddress;
 
-      if (!userId) {
+      if (!frontendWalletAddress) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
-      const stats = await DCAService.getUserDCAStats(userId);
+      const stats = await DCAService.getUserDCAStats(frontendWalletAddress);
 
       res.json({
         success: true,
@@ -291,15 +291,15 @@ export class DCAController {
    */
   static async getUserTokenBalances(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const userId = req.user?.id;
+      const frontendWalletAddress = req.user?.frontendWalletAddress;
 
-      if (!userId) {
+      if (!frontendWalletAddress) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
       // Get user wallet
-      const user = await WalletService.getWalletByPrivyId(userId);
+      const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
       if (!user) {
         res.status(404).json({ error: 'User wallet not found' });
         return;
@@ -398,33 +398,7 @@ export class DCAController {
     }
   }
 
-  /**
-   * Get swap quote
-   * POST /api/dca/quote
-   */
-  static async getSwapQuote(req: Request, res: Response): Promise<void> {
-    try {
-      const { fromToken, toToken, amount, slippage } = req.body;
 
-      if (!fromToken || !toToken || !amount) {
-        res.status(400).json({ error: 'fromToken, toToken, and amount are required' });
-        return;
-      }
-
-      const quote = await SwapService.getSwapQuote(fromToken, toToken, amount, slippage);
-
-      res.json({
-        success: true,
-        data: quote,
-      });
-    } catch (error: any) {
-      console.error('Error getting swap quote:', error);
-      res.status(500).json({ 
-        error: 'Failed to get swap quote',
-        message: error.message 
-      });
-    }
-  }
 
   /**
    * Start DCA executor (admin endpoint)

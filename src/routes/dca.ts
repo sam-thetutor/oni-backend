@@ -43,8 +43,7 @@ router.get('/stats', authenticateToken, DCAController.getUserStats);
 // Token Balances (require authentication)
 router.get('/balances', authenticateToken, DCAController.getUserTokenBalances);
 
-// Quote endpoint (no auth required for quotes)
-router.post('/quote', DCAController.getSwapQuote);
+
 
 // System Status and Monitoring (public endpoints for monitoring)
 router.get('/system/status', DCAController.getSystemStatus);

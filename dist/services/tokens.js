@@ -182,18 +182,33 @@ export class TokenService {
             });
         }
         try {
-            const tUSDCBalance = await this.getTokenBalance(TOKEN_ADDRESSES.tUSDC, walletAddress);
-            results.push(tUSDCBalance);
+            const usdcBalance = await this.getTokenBalance(TOKEN_ADDRESSES.USDC, walletAddress);
+            results.push(usdcBalance);
         }
         catch (error) {
-            console.error('❌ Failed to get tUSDC balance:', error);
-            const tUSDCMetadata = TOKEN_METADATA.tUSDC;
+            console.error('❌ Failed to get USDC balance:', error);
+            const usdcMetadata = TOKEN_METADATA.USDC;
             results.push({
                 address: walletAddress,
                 balance: '0',
                 formatted: '0',
-                symbol: tUSDCMetadata.symbol,
-                decimals: tUSDCMetadata.decimals,
+                symbol: usdcMetadata.symbol,
+                decimals: usdcMetadata.decimals,
+            });
+        }
+        try {
+            const usdtBalance = await this.getTokenBalance(TOKEN_ADDRESSES.USDT, walletAddress);
+            results.push(usdtBalance);
+        }
+        catch (error) {
+            console.error('❌ Failed to get USDT balance:', error);
+            const usdtMetadata = TOKEN_METADATA.USDT;
+            results.push({
+                address: walletAddress,
+                balance: '0',
+                formatted: '0',
+                symbol: usdtMetadata.symbol,
+                decimals: usdtMetadata.decimals,
             });
         }
         return results;

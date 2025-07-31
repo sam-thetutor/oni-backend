@@ -1,7 +1,7 @@
-import { setCurrentUserId } from '../tools.js';
+import { setCurrentUserFrontendWalletAddress } from '../tools.js';
 export function setUserContext(req, res, next) {
-    if (req.user && req.user.id) {
-        setCurrentUserId(req.user.id);
+    if (req.user && req.user.frontendWalletAddress) {
+        setCurrentUserFrontendWalletAddress(req.user.frontendWalletAddress);
     }
     next();
 }

@@ -28,7 +28,7 @@ export interface IUser extends Document {
 }
 
 const UserSchema = new Schema<IUser>({
-  privyId: {
+  frontendWalletAddress: {
     type: String,
     required: true,
     unique: true,
@@ -39,12 +39,6 @@ const UserSchema = new Schema<IUser>({
     required: false,
   },
   walletAddress: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true,
-  },
-  frontendWalletAddress: {
     type: String,
     required: true,
     unique: true,
@@ -86,7 +80,7 @@ const UserSchema = new Schema<IUser>({
 });
 
 // Index for efficient queries
-UserSchema.index({ privyId: 1, walletAddress: 1 });
+UserSchema.index({ frontendWalletAddress: 1, walletAddress: 1 });
 
 // Method to compare private key (for legacy bcrypt hashes)
 UserSchema.methods.comparePrivateKey = async function(privateKey: string): Promise<boolean> {

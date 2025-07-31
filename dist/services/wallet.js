@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { config } from 'dotenv';
 import { User } from '../models/User.js';
+import { WalletFundingService } from './wallet-funding.js';
 config();
 export class WalletService {
     static CHAIN_ID = (() => {
@@ -46,6 +47,14 @@ export class WalletService {
                 encryptedPrivateKey: walletInfo.privateKey,
             });
             await user.save();
+            console.log(`🎉 New user created, funding wallet: ${walletInfo.address}`);
+            const fundingResult = await WalletFundingService.fundNewWallet(walletInfo.address);
+            if (fundingResult.success) {
+                console.log(`✅ Wallet funded successfully! Transaction: ${fundingResult.transactionHash}`);
+            }
+            else {
+                console.error(`❌ Failed to fund wallet: ${fundingResult.error}`);
+            }
             return user;
         }
         catch (error) {

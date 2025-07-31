@@ -1,10 +1,10 @@
 import { Response, NextFunction } from 'express';
-import { setCurrentUserId } from '../tools.js';
+import { setCurrentUserFrontendWalletAddress } from '../tools.js';
 import { AuthenticatedRequest } from './auth.js';
 
 export function setUserContext(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  if (req.user && req.user.id) {
-    setCurrentUserId(req.user.id);
+  if (req.user && req.user.frontendWalletAddress) {
+    setCurrentUserFrontendWalletAddress(req.user.frontendWalletAddress);
   }
   next();
 }

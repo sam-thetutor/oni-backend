@@ -1,9 +1,9 @@
 import { Socket } from 'socket.io';
 import { PrivyService, PrivyUser } from '../services/privy.js';
-import { WalletService } from '../services/wallet.js';
+import { MongoDBService } from '../services/mongodb.js';
 
 export interface AuthenticatedSocket extends Socket {
-  userId?: string;
+  frontendWalletAddress?: string;
   walletAddress?: string;
 }
 
@@ -32,17 +32,17 @@ export const authenticateSocket = async (socket: AuthenticatedSocket, next: (err
     console.log('🔌 Getting user wallet from database...');
 
     // Get user wallet from database
-    const user = await WalletService.getUserWallet(privyUser.id, privyUser.wallet.address, privyUser.email);
+    const user = await MongoDBService.getUserWallet(privyUser.wallet.address, privyUser.email);
     if (!user) {
       console.log('🔌 User wallet not found in database');
       return next(new Error('User wallet not found'));
     }
 
     // Attach user info to socket
-    socket.userId = user.id;
+    socket.frontendWalletAddress = privyUser.wallet.address;
     socket.walletAddress = user.walletAddress;
 
-    console.log(`🔌 WebSocket authenticated successfully: ${user.walletAddress}`);
+    console.log(`🔌 WebSocket authenticated successfully: ${user.walletAddress} (frontend: ${privyUser.wallet.address})`);
     next();
   } catch (error: any) {
     console.error('❌ WebSocket authentication error:', error);

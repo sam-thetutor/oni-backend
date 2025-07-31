@@ -3,7 +3,7 @@ import { config } from 'dotenv';
 import { EncryptionService } from '../utils/encryption.js';
 config();
 const UserSchema = new Schema({
-    privyId: {
+    frontendWalletAddress: {
         type: String,
         required: true,
         unique: true,
@@ -14,12 +14,6 @@ const UserSchema = new Schema({
         required: false,
     },
     walletAddress: {
-        type: String,
-        required: true,
-        unique: true,
-        index: true,
-    },
-    frontendWalletAddress: {
         type: String,
         required: true,
         unique: true,
@@ -59,7 +53,7 @@ const UserSchema = new Schema({
 }, {
     timestamps: true,
 });
-UserSchema.index({ privyId: 1, walletAddress: 1 });
+UserSchema.index({ frontendWalletAddress: 1, walletAddress: 1 });
 UserSchema.methods.comparePrivateKey = async function (privateKey) {
     if (this.encryptedPrivateKey.startsWith('$2')) {
         const bcrypt = await import('bcryptjs');

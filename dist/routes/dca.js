@@ -10,7 +10,6 @@ router.put('/orders/:orderId', authenticateToken, sanitizeNumericInputs, validat
 router.delete('/orders/:orderId', authenticateToken, validateOrderOwnership, DCAController.cancelOrder);
 router.get('/stats', authenticateToken, DCAController.getUserStats);
 router.get('/balances', authenticateToken, DCAController.getUserTokenBalances);
-router.post('/quote', DCAController.getSwapQuote);
 router.get('/system/status', DCAController.getSystemStatus);
 router.post('/system/start', DCAController.startExecutor);
 router.post('/system/stop', DCAController.stopExecutor);

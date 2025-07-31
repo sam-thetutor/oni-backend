@@ -13,6 +13,7 @@ import userWalletRoutes from "./routes/userWallet.js";
 import userPaymentLinksRoutes from "./routes/userPaymentLinks.js";
 import { priceDataRoutes } from "./routes/price-data.js";
 import dcaRoutes from "./routes/dca.js";
+import swapRoutes from "./routes/swap.js";
 import { DCAExecutorService } from "./services/dca-executor.js";
 import { CronService } from "./services/cronService.js";
 import { setUserContext } from "./middleware/setUserContext.js";
@@ -25,14 +26,14 @@ const messageRateLimit = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000;
 const MAX_MESSAGES_PER_MINUTE = 10;
 const rateLimitMessages = (req, res, next) => {
-    const userId = req.user?.id;
-    if (!userId) {
+    const frontendWalletAddress = req.user?.frontendWalletAddress;
+    if (!frontendWalletAddress) {
         return res.status(401).json({ error: 'User not authenticated' });
     }
     const now = Date.now();
-    const userLimit = messageRateLimit.get(userId);
+    const userLimit = messageRateLimit.get(frontendWalletAddress);
     if (!userLimit || now > userLimit.resetTime) {
-        messageRateLimit.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+        messageRateLimit.set(frontendWalletAddress, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
         return next();
     }
     if (userLimit.count >= MAX_MESSAGES_PER_MINUTE) {
@@ -66,7 +67,7 @@ app.get('/health', (req, res) => {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development',
-        database: 'supabase',
+        database: 'mongodb',
         message: 'Backend is running successfully!'
     });
 });
@@ -145,19 +146,20 @@ app.use('/api/user/wallet', authenticateToken, setUserContext, userWalletRoutes)
 app.use('/api/user/payment-links', setUserContext, userPaymentLinksRoutes);
 app.use('/api/price-data', authenticateToken, setUserContext, priceDataRoutes);
 app.use('/api/dca', authenticateToken, setUserContext, dcaRoutes);
+app.use('/api/swap', swapRoutes);
 app.post('/message', authenticateToken, requireWalletConnection, rateLimitMessages, async (req, res) => {
     try {
         const { message } = req.body;
         const user = req.user;
-        memoryStore.addMessage(user.id, new HumanMessage(message));
-        const history = memoryStore.getHistory(user.id);
+        memoryStore.addMessage(user.frontendWalletAddress, new HumanMessage(message));
+        const history = memoryStore.getHistory(user.frontendWalletAddress);
         const result = await graph.invoke({
             messages: history,
-            userId: user.id,
+            userId: user.frontendWalletAddress,
         });
         const aiMessage = result.messages[result.messages.length - 1];
         if (aiMessage) {
-            memoryStore.addMessage(user.id, aiMessage);
+            memoryStore.addMessage(user.frontendWalletAddress, aiMessage);
         }
         const response = aiMessage?.content || "I'm sorry, I couldn't generate a response.";
         res.json({ response });
@@ -212,7 +214,7 @@ const startServer = async () => {
     try {
         try {
             await connectDB();
-            console.log('✅ Connected to Supabase');
+            console.log('✅ Connected to MongoDB');
         }
         catch (dbError) {
             console.warn('⚠️ Database connection failed (continuing without DB):', dbError);

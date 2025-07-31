@@ -1,7 +1,7 @@
 import { StructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import toolSelectionService from "../services/toolSelection.js";
-import { setCurrentUserId } from "../tools.js";
+import { setCurrentUserFrontendWalletAddress } from "../tools.js";
 
 export class IntelligentTool extends StructuredTool {
   name = "intelligent_tool_selector";

@@ -13,10 +13,11 @@ import userWalletRoutes from "./routes/userWallet.js";
 import userPaymentLinksRoutes from "./routes/userPaymentLinks.js";
 import { priceDataRoutes } from "./routes/price-data.js";
 import dcaRoutes from "./routes/dca.js";
+import swapRoutes from "./routes/swap.js";
 import { PriceCacheService } from "./services/price-cache.js";
 import { DCAExecutorService } from "./services/dca-executor.js";
 import { CronService } from "./services/cronService.js";
-import { setCurrentUserId } from "./tools.js";
+import { setCurrentUserFrontendWalletAddress } from "./tools.js";
 import {setUserContext} from "./middleware/setUserContext.js"
 import { initializeSocket, closeSocket } from "./socket/index.js";
 
@@ -33,18 +34,18 @@ const MAX_MESSAGES_PER_MINUTE = 10;
 
 // Rate limiting middleware for messages
 const rateLimitMessages = (req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) => {
-  const userId = req.user?.id;
+  const frontendWalletAddress = req.user?.frontendWalletAddress;
   
-  if (!userId) {
+  if (!frontendWalletAddress) {
     return res.status(401).json({ error: 'User not authenticated' });
   }
 
   const now = Date.now();
-  const userLimit = messageRateLimit.get(userId);
+  const userLimit = messageRateLimit.get(frontendWalletAddress);
   
   if (!userLimit || now > userLimit.resetTime) {
     // Reset or create new limit
-    messageRateLimit.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    messageRateLimit.set(frontendWalletAddress, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
     return next();
   }
 
@@ -89,7 +90,7 @@ app.get('/health', (req, res) => {
     status: 'healthy', 
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    database: 'supabase',
+    database: 'mongodb',
     message: 'Backend is running successfully!'
   });
 });
@@ -181,6 +182,7 @@ app.use('/api/user/wallet', authenticateToken, setUserContext, userWalletRoutes)
 app.use('/api/user/payment-links', setUserContext, userPaymentLinksRoutes);
 app.use('/api/price-data', authenticateToken, setUserContext, priceDataRoutes);
 app.use('/api/dca', authenticateToken, setUserContext, dcaRoutes);
+app.use('/api/swap', swapRoutes);
 // Main message endpoint
 app.post('/message', authenticateToken, requireWalletConnection, rateLimitMessages, async (req: AuthenticatedRequest, res) => {
   try {
@@ -188,21 +190,21 @@ app.post('/message', authenticateToken, requireWalletConnection, rateLimitMessag
     const user = req.user!;
 
     // Add user message to memory
-    memoryStore.addMessage(user.id, new HumanMessage(message));
+    memoryStore.addMessage(user.frontendWalletAddress, new HumanMessage(message));
 
     // Get conversation history
-    const history = memoryStore.getHistory(user.id);
+    const history = memoryStore.getHistory(user.frontendWalletAddress);
 
-    // Run the graph with user ID in state
+    // Run the graph with user frontend wallet address in state
     const result = await graph.invoke({
       messages: history,
-      userId: user.id, // Pass privyId to graph state (not walletAddress)
+      userId: user.frontendWalletAddress, // Pass frontend wallet address to graph state
     });
 
     // Add AI response to memory
     const aiMessage = result.messages[result.messages.length - 1];
     if (aiMessage) {
-      memoryStore.addMessage(user.id, aiMessage);
+      memoryStore.addMessage(user.frontendWalletAddress, aiMessage);
     }
 
     // Extract the response
@@ -276,7 +278,7 @@ const startServer = async () => {
     // Try to connect to database (but don't fail if it's not available)
     try {
       await connectDB();
-      console.log('✅ Connected to Supabase');
+      console.log('✅ Connected to MongoDB');
     } catch (dbError) {
       console.warn('⚠️ Database connection failed (continuing without DB):', dbError);
       // Don't exit the process, just continue without database

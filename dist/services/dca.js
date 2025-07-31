@@ -1,5 +1,4 @@
 import { DCAOrder } from '../models/DCAOrder.js';
-import { SwapService } from './swap.js';
 import { TokenService } from './tokens.js';
 import { PriceAnalyticsService } from './price-analytics.js';
 import { WalletService } from './wallet.js';
@@ -97,30 +96,15 @@ export class DCAService {
             if (!this.shouldExecuteOrder(order, currentPrice)) {
                 throw new Error('Order no longer meets execution criteria');
             }
-            const fromTokenMeta = TOKEN_METADATA[order.orderType === 'buy' ? 'tUSDC' : 'XFI'];
-            const fromAmount = TokenService.formatTokenAmount(order.fromAmount, fromTokenMeta.decimals);
-            const swapResult = await SwapService.executeSwap(user, fromTokenMeta.symbol, order.orderType === 'buy' ? 'XFI' : 'tUSDC', fromAmount, order.maxSlippage);
-            if (swapResult.success) {
-                order.status = 'executed';
-                order.executedAt = new Date();
-                order.executedPrice = currentPrice;
-                order.executedAmount = swapResult.toAmount;
-                order.transactionHash = swapResult.transactionHash;
-                console.log(`DCA order ${order._id} executed successfully`);
-            }
-            else {
-                order.retryCount += 1;
-                order.failureReason = swapResult.error;
-                if (order.retryCount >= order.maxRetries) {
-                    order.status = 'failed';
-                    console.log(`DCA order ${order._id} failed after ${order.retryCount} attempts`);
-                }
-                else {
-                    console.log(`DCA order ${order._id} failed, will retry (attempt ${order.retryCount}/${order.maxRetries})`);
-                }
-            }
+            console.log(`DCA order ${order._id} ready for execution - swap functionality needs to be implemented`);
+            order.status = 'failed';
+            order.failureReason = 'Swap functionality temporarily unavailable';
+            order.retryCount += 1;
             await order.save();
-            return swapResult;
+            return {
+                success: false,
+                error: 'Swap functionality temporarily unavailable',
+            };
         }
         catch (error) {
             console.error(`Error executing DCA order ${order._id}:`, error);
@@ -294,14 +278,14 @@ export class DCAService {
     static getTokensForOrderType(orderType) {
         if (orderType === 'buy') {
             return {
-                fromToken: TOKEN_ADDRESSES.tUSDC,
+                fromToken: TOKEN_ADDRESSES.USDC,
                 toToken: TOKEN_ADDRESSES.XFI
             };
         }
         else {
             return {
                 fromToken: TOKEN_ADDRESSES.XFI,
-                toToken: TOKEN_ADDRESSES.tUSDC
+                toToken: TOKEN_ADDRESSES.USDC
             };
         }
     }
