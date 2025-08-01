@@ -305,7 +305,7 @@ export async function getUserTokenBalances(params) {
         balances.forEach(balance => {
             message += `${balance.symbol === 'XFI' ? '🔵' : '🟢'} ${balance.symbol}: ${parseFloat(balance.formatted).toFixed(6)}\n`;
         });
-        message += `\n💡 You can create DCA orders to automatically swap between XFI and USDC/USDT based on price triggers.`;
+        message += `\n💡 You can create DCA orders to automatically swap between XFI and USDC based on price triggers. USDC↔XFI is the recommended stablecoin pair with accurate pricing (~13.12 XFI per 1 USDC). Note: USDT is temporarily disabled due to incorrect pricing.`;
         return {
             success: true,
             message,

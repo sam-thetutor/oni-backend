@@ -33,12 +33,19 @@ export interface SwapParams {
 export interface SwapResult {
   success: boolean;
   transactionHash?: string;
+  wrapTransactionHash?: string;
+  unwrapTransactionHash?: string;
   fromAmount: string;
   toAmount?: string;
   fromToken: string;
   toToken: string;
   gasUsed?: string;
   gasPrice?: string;
+  wrapGasUsed?: string;
+  wrapGasPrice?: string;
+  unwrapGasUsed?: string;
+  unwrapGasPrice?: string;
+  finalToken?: string;
   error?: string;
   errorCode?: string;
 }

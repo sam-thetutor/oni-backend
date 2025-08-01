@@ -3,11 +3,11 @@ config();
 const isProduction = process.env.ENVIRONMENT === 'production';
 export const TOKEN_ADDRESSES = {
     XFI: isProduction
-        ? "0x4b641f607570b93520c2e678fb3cc9d712c7d12f"
-        : "0x4b641f607570b93520c2e678fb3cc9d712c7d12f",
+        ? "0x0000000000000000000000000000000000000000"
+        : "0x0000000000000000000000000000000000000000",
     CFI: isProduction
-        ? "0x4b641f607570b93520c2e678fb3cc9d712c7d12f"
-        : "0x4b641f607570b93520c2e678fb3cc9d712c7d12f",
+        ? "0x0000000000000000000000000000000000000000"
+        : "0x0000000000000000000000000000000000000000",
     WXFI: isProduction
         ? "0xC537D12bd626B135B251cCa43283EFF69eC109c4"
         : "0xC537D12bd626B135B251cCa43283EFF69eC109c4",
@@ -129,20 +129,6 @@ export const SUPPORTED_DCA_PAIRS = [
         description: 'Sell XFI for USDC',
         minAmount: '0.1',
         maxAmount: '1000',
-    },
-    {
-        from: 'USDT',
-        to: 'XFI',
-        description: 'Buy XFI with USDT',
-        minAmount: '1',
-        maxAmount: '10000',
-    },
-    {
-        from: 'XFI',
-        to: 'USDT',
-        description: 'Sell XFI for USDT',
-        minAmount: '0.1',
-        maxAmount: '1000',
     }
 ];
 export const DCA_CONFIG = {
@@ -177,7 +163,7 @@ export const SWAP_CONFIG = {
     RETRY_ATTEMPTS: 3,
     RETRY_DELAY_SECONDS: 5,
     DEADLINE_MINUTES: 20,
-    SUPPORTED_TOKENS: ['CFI', 'WXFI', 'FOMO', 'WETH', 'USDC', 'WBTC', 'USDT', 'BNB', 'SOL', 'XUSD'],
+    SUPPORTED_TOKENS: ['CFI', 'WXFI', 'FOMO', 'WETH', 'USDC', 'WBTC', 'BNB', 'SOL', 'XUSD'],
 };
 export function getTokenByAddress(address) {
     return Object.values(TOKEN_METADATA).find(token => token.address.toLowerCase() === address.toLowerCase());

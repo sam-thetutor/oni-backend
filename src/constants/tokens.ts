@@ -8,11 +8,11 @@ const isProduction = process.env.ENVIRONMENT === 'production';
 // Token addresses - CrossFi Mainnet (updated with real tokens from blockchain)
 export const TOKEN_ADDRESSES = {
   XFI: isProduction
-    ? "0x4b641f607570b93520c2e678fb3cc9d712c7d12f" // CrossFi Mainnet XFI
-    : "0x4b641f607570b93520c2e678fb3cc9d712c7d12f", // CrossFi Testnet XFI (same for now)
+    ? "0x0000000000000000000000000000000000000000" // CrossFi Mainnet XFI (native token)
+    : "0x0000000000000000000000000000000000000000", // CrossFi Testnet XFI (native token)
   CFI: isProduction
-    ? "0x4b641f607570b93520c2e678fb3cc9d712c7d12f" // CrossFi Mainnet CFI (same as XFI for now)
-    : "0x4b641f607570b93520c2e678fb3cc9d712c7d12f", // CrossFi Testnet CFI
+    ? "0x0000000000000000000000000000000000000000" // CrossFi Mainnet CFI (native token)
+    : "0x0000000000000000000000000000000000000000", // CrossFi Testnet CFI (native token)
   // Real tokens discovered from blockchain
   WXFI: isProduction
     ? "0xC537D12bd626B135B251cCa43283EFF69eC109c4" // CrossFi Mainnet WXFI
@@ -124,7 +124,7 @@ export const TOKEN_METADATA = {
   },
 } as const;
 
-// Supported DCA trading pairs (updated to use real tokens)
+// Supported DCA trading pairs (updated to use USDC as primary stablecoin)
 export const SUPPORTED_DCA_PAIRS = [
   {
     from: 'USDC',
@@ -137,20 +137,6 @@ export const SUPPORTED_DCA_PAIRS = [
     from: 'XFI',
     to: 'USDC',
     description: 'Sell XFI for USDC',
-    minAmount: '0.1', // Minimum 0.1 XFI
-    maxAmount: '1000', // Maximum 1,000 XFI
-  },
-  {
-    from: 'USDT',
-    to: 'XFI',
-    description: 'Buy XFI with USDT',
-    minAmount: '1', // Minimum 1 USDT
-    maxAmount: '10000', // Maximum 10,000 USDT
-  },
-  {
-    from: 'XFI',
-    to: 'USDT',
-    description: 'Sell XFI for USDT',
     minAmount: '0.1', // Minimum 0.1 XFI
     maxAmount: '1000', // Maximum 1,000 XFI
   }
@@ -195,7 +181,7 @@ export const SWAP_CONFIG = {
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY_SECONDS: 5,
   DEADLINE_MINUTES: 20, // 20 minutes deadline for swaps
-  SUPPORTED_TOKENS: ['CFI', 'WXFI', 'FOMO', 'WETH', 'USDC', 'WBTC', 'USDT', 'BNB', 'SOL', 'XUSD'] as const,
+  SUPPORTED_TOKENS: ['CFI', 'WXFI', 'FOMO', 'WETH', 'USDC', 'WBTC', 'BNB', 'SOL', 'XUSD'] as const, // Removed USDT
 } as const;
 
 // Helper functions

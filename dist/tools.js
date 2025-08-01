@@ -103,7 +103,7 @@ class GetWalletForOperationsTool extends StructuredTool {
 }
 class GetBalanceTool extends StructuredTool {
     name = "get_balance";
-    description = "Gets the balance of the user's wallet";
+    description = "Gets the balance of the user's wallet including XFI and USDC tokens";
     schema = z.object({});
     async _call(input, runManager) {
         try {
@@ -132,14 +132,34 @@ class GetBalanceTool extends StructuredTool {
             console.log(`  - RPC URL: ${process.env.RPC_URL}`);
             console.log(`  - Chain ID: ${process.env.CHAIN_ID}`);
             console.log(`  - User Address: ${user.walletAddress}`);
-            const balance = await BlockchainService.getBalance(user.walletAddress);
-            console.log(`  - Balance Result:`, balance);
+            const xfiBalance = await BlockchainService.getBalance(user.walletAddress);
+            let usdcBalance = null;
+            try {
+                const tokenBalances = await TokenService.getDCATokenBalances(user.walletAddress);
+                const usdcToken = tokenBalances.find(token => token.symbol === 'USDC');
+                if (usdcToken) {
+                    usdcBalance = {
+                        balance: usdcToken.balance,
+                        formatted: usdcToken.formatted,
+                        symbol: 'USDC',
+                        decimals: usdcToken.decimals
+                    };
+                }
+            }
+            catch (error) {
+                console.log(`  - USDC balance fetch failed: ${error}`);
+            }
+            console.log(`  - XFI Balance Result:`, xfiBalance);
+            console.log(`  - USDC Balance Result:`, usdcBalance);
             return JSON.stringify({
                 success: true,
-                address: balance.address,
-                balance: balance.balance,
-                formatted: balance.formatted,
-                symbol: 'XFI',
+                address: xfiBalance.address,
+                xfi: {
+                    balance: xfiBalance.balance,
+                    formatted: xfiBalance.formatted,
+                    symbol: 'XFI'
+                },
+                usdc: usdcBalance,
                 debug: {
                     environment: process.env.ENVIRONMENT,
                     rpcUrl: process.env.RPC_URL,
@@ -265,9 +285,9 @@ class SendTransactionTool extends StructuredTool {
 }
 class SendTokenTool extends StructuredTool {
     name = "send_token";
-    description = "Sends USDT or USDC tokens from the user's wallet to another address. Use this when user says 'send USDT', 'transfer USDC', 'send 10 USDT to address', etc.";
+    description = "Sends USDC tokens from the user's wallet to another address. Use this when user says 'send USDC', 'transfer USDC', 'send 10 USDC to address', etc. Note: USDT is temporarily disabled due to incorrect pricing.";
     schema = z.object({
-        token: z.enum(["USDT", "USDC"]).describe("The token to send (USDT or USDC)"),
+        token: z.enum(["USDC"]).describe("The token to send (USDT temporarily disabled)"),
         to: z.string().describe("The recipient wallet address"),
         amount: z.string().describe("The amount to send (e.g., '10.5')")
     });
@@ -1109,10 +1129,10 @@ class GetDCAOrderStatusTool extends StructuredTool {
 }
 class GetSwapQuoteTool extends StructuredTool {
     name = "get_swap_quote";
-    description = "Gets a quote/estimate for a token swap WITHOUT executing it. Use this when user asks for 'quote', 'estimate', 'how much will I get', or 'check price'. DO NOT use this when user says 'swap', 'execute', 'trade', or 'now swap'. Working pairs include: XFI↔USDT, XFI↔USDC, WXFI↔FOMO, WXFI↔WETH, WXFI↔USDC, WXFI↔WBTC, WXFI↔USDT, WXFI↔BNB, WXFI↔SOL, WXFI↔XUSD, USDC↔XUSD, USDT↔XUSD";
+    description = "Gets a quote/estimate for a token swap WITHOUT executing it. Use this when user asks for 'quote', 'estimate', 'how much will I get', or 'check price'. DO NOT use this when user says 'swap', 'execute', 'trade', or 'now swap'. PRIMARY PAIRS: USDC↔XFI (recommended), XFI↔USDC. When swapping USDC to XFI, users get NATIVE XFI tokens (not WXFI). Other pairs: WXFI↔FOMO, WXFI↔WETH, WXFI↔WBTC, WXFI↔BNB, WXFI↔SOL, WXFI↔XUSD, USDC↔XUSD. NOTE: USDT swaps are temporarily disabled due to incorrect pricing.";
     schema = z.object({
-        fromToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "USDT", "BNB", "SOL", "XUSD"]).describe("Token to swap from"),
-        toToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "USDT", "BNB", "SOL", "XUSD"]).describe("Token to swap to"),
+        fromToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "BNB", "SOL", "XUSD"]).describe("Token to swap from (USDT temporarily disabled)"),
+        toToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "BNB", "SOL", "XUSD"]).describe("Token to swap to (USDT temporarily disabled)"),
         amount: z.string().describe("Amount to swap"),
         slippage: z.union([z.number(), z.string()]).optional().describe("Maximum slippage percentage (default: 5%). Can be a number or string.")
     });
@@ -1143,8 +1163,8 @@ class GetSwapQuoteTool extends StructuredTool {
             if (!result.success && result.message.includes('getAmountsOut') && result.message.includes('reverted')) {
                 const workingPairs = [
                     'WXFI ↔ FOMO', 'WXFI ↔ WETH', 'WXFI ↔ USDC', 'WXFI ↔ WBTC',
-                    'WXFI ↔ USDT', 'WXFI ↔ BNB', 'WXFI ↔ SOL', 'WXFI ↔ XUSD',
-                    'USDC ↔ XUSD', 'USDT ↔ XUSD'
+                    'WXFI ↔ BNB', 'WXFI ↔ SOL', 'WXFI ↔ XUSD',
+                    'USDC ↔ XUSD'
                 ];
                 return JSON.stringify({
                     success: false,
@@ -1179,7 +1199,7 @@ class GetDCASystemStatusTool extends StructuredTool {
 }
 class GetUserTokenBalancesTool extends StructuredTool {
     name = "get_user_token_balances";
-    description = "Gets the user's current balances for DCA-supported tokens (XFI, USDC, and USDT)";
+    description = "Gets the user's current balances for DCA-supported tokens (XFI, USDC). Note: USDT is temporarily disabled due to incorrect pricing.";
     schema = z.object({});
     async _call(input, runManager) {
         try {
@@ -1250,82 +1270,170 @@ class AddLiquidityTool extends StructuredTool {
 }
 class ExecuteSwapTool extends StructuredTool {
     name = "execute_swap";
-    description = "ACTUALLY EXECUTES a token swap on the blockchain. Use this when user says 'swap', 'execute', 'trade', 'now swap', 'perform swap', or 'do the swap'. This will create a real transaction. Working pairs include: XFI↔USDT, XFI↔USDC, WXFI↔FOMO, WXFI↔WETH, WXFI↔USDC, WXFI↔WBTC, WXFI↔USDT, WXFI↔BNB, WXFI↔SOL, WXFI↔XUSD, USDC↔XUSD, USDT↔XUSD";
+    description = "ACTUALLY EXECUTES a token swap on the blockchain. Use this when user says 'swap', 'execute', 'trade', 'now swap', 'perform swap', or 'do the swap'. This will create a real transaction. PRIMARY PAIRS: USDC↔XFI (recommended), XFI↔USDC. When swapping USDC to XFI, users get NATIVE XFI tokens (not WXFI). Approvals are handled automatically - no need to approve tokens separately. IMPORTANT: User must have their wallet properly configured in the system for transactions to work. Other pairs: WXFI↔FOMO, WXFI↔WETH, WXFI↔WBTC, WXFI↔BNB, WXFI↔SOL, WXFI↔XUSD, USDC↔XUSD. NOTE: USDT swaps are temporarily disabled due to incorrect pricing.";
     schema = z.object({
-        fromToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "USDT", "BNB", "SOL", "XUSD"]).describe("Token to swap from"),
-        toToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "USDT", "BNB", "SOL", "XUSD"]).describe("Token to swap to"),
+        fromToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "BNB", "SOL", "XUSD"]).describe("Token to swap from (USDT temporarily disabled)"),
+        toToken: z.enum(["XFI", "CFI", "WXFI", "FOMO", "WETH", "USDC", "WBTC", "BNB", "SOL", "XUSD"]).describe("Token to swap to (USDT temporarily disabled)"),
         fromAmount: z.string().describe("Amount of fromToken to swap"),
         slippage: z.union([z.number(), z.string()]).optional().describe("Maximum slippage percentage (default: 5%). Can be a number or string.")
     });
     async _call(input, runManager) {
         try {
+            console.log('🔄 ExecuteSwapTool: Starting swap execution...');
+            console.log('📝 Input parameters:', JSON.stringify(input, null, 2));
             const frontendWalletAddress = currentUserFrontendWalletAddress;
+            console.log('👤 Frontend wallet address:', frontendWalletAddress);
             if (!frontendWalletAddress) {
+                console.log('❌ ExecuteSwapTool: No frontend wallet address found');
                 return JSON.stringify({
                     success: false,
                     error: 'User not authenticated. Please try again.'
                 });
             }
+            console.log('🔍 ExecuteSwapTool: Looking up user in database...');
             const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+            console.log('👤 User found in database:', user ? '✅ Yes' : '❌ No');
             if (!user) {
+                console.log('❌ ExecuteSwapTool: User wallet not found in database');
                 return JSON.stringify({
                     success: false,
                     error: 'User wallet not found in database'
                 });
             }
+            console.log('🔑 ExecuteSwapTool: Checking encrypted private key...');
+            console.log('🔑 User wallet address:', user.walletAddress);
+            console.log('🔑 Has encrypted private key:', user.encryptedPrivateKey ? '✅ Yes' : '❌ No');
+            console.log('🔑 Private key length:', user.encryptedPrivateKey ? user.encryptedPrivateKey.length : 0);
+            if (!user.encryptedPrivateKey) {
+                console.log('❌ ExecuteSwapTool: User wallet not configured for transactions');
+                return JSON.stringify({
+                    success: false,
+                    error: 'User wallet not configured for transactions. Please connect your wallet through the frontend first.'
+                });
+            }
             const { fromToken, toToken, fromAmount, slippage } = input;
+            console.log('💰 ExecuteSwapTool: Swap details:');
+            console.log('   From Token:', fromToken);
+            console.log('   To Token:', toToken);
+            console.log('   Amount:', fromAmount);
+            console.log('   Slippage:', slippage);
             let slippageNumber = 5;
             if (slippage !== undefined) {
                 slippageNumber = typeof slippage === 'string' ? parseFloat(slippage) : slippage;
                 if (isNaN(slippageNumber)) {
+                    console.log('❌ ExecuteSwapTool: Invalid slippage value');
                     return JSON.stringify({ success: false, error: 'Invalid slippage value. Must be a number.' });
                 }
             }
-            const mappedFromToken = fromToken === 'XFI' ? 'CFI' : fromToken;
-            const mappedToToken = toToken === 'XFI' ? 'CFI' : toToken;
+            console.log('📊 ExecuteSwapTool: Processed slippage:', slippageNumber);
+            let mappedFromToken = fromToken;
+            let mappedToToken = toToken;
+            if (fromToken === 'USDC' && toToken === 'XFI') {
+                mappedToToken = 'WXFI';
+                console.log('🔄 ExecuteSwapTool: USDC to XFI swap detected - will swap to WXFI then unwrap');
+            }
+            else if (fromToken === 'XFI' && toToken === 'USDC') {
+                mappedFromToken = 'WXFI';
+                console.log('🔄 ExecuteSwapTool: XFI to USDC swap detected - will unwrap XFI to WXFI first');
+            }
+            console.log('🔄 ExecuteSwapTool: Token mapping:');
+            console.log('   From:', fromToken, '→', mappedFromToken);
+            console.log('   To:', toToken, '→', mappedToToken);
             if (mappedFromToken === mappedToToken) {
+                console.log('❌ ExecuteSwapTool: Cannot swap token for itself');
                 return JSON.stringify({
                     success: false,
                     error: 'Cannot swap a token for itself. Please choose different tokens.'
                 });
             }
+            console.log('🔍 ExecuteSwapTool: Getting user model for SwapService...');
             const userModel = await User.findOne({ frontendWalletAddress });
+            console.log('👤 User model found:', userModel ? '✅ Yes' : '❌ No');
             if (!userModel) {
+                console.log('❌ ExecuteSwapTool: User not found in User model');
                 return JSON.stringify({
                     success: false,
                     error: 'User not found in database'
                 });
             }
+            console.log('🔧 ExecuteSwapTool: Using database wallet for all operations');
+            console.log('   Database wallet:', userModel.walletAddress);
+            console.log('   Frontend wallet:', frontendWalletAddress);
+            console.log('   Note: All operations use database wallet address');
+            if (fromToken === 'USDC') {
+                console.log('💰 ExecuteSwapTool: Checking USDC balance in database wallet...');
+                try {
+                    const { publicClient } = await import('./config/viem.js');
+                    const { getTokenBySymbol } = await import('./constants/tokens.js');
+                    const { parseUnits, formatUnits } = await import('viem');
+                    const usdcToken = getTokenBySymbol('USDC');
+                    const balance = await publicClient.readContract({
+                        address: usdcToken.address,
+                        abi: [
+                            {
+                                inputs: [{ name: 'account', type: 'address' }],
+                                name: 'balanceOf',
+                                outputs: [{ name: '', type: 'uint256' }],
+                                stateMutability: 'view',
+                                type: 'function'
+                            }
+                        ],
+                        functionName: 'balanceOf',
+                        args: [userModel.walletAddress]
+                    });
+                    const balanceFormatted = formatUnits(balance, usdcToken.decimals);
+                    const requiredAmount = parseFloat(fromAmount);
+                    console.log(`   USDC Balance: ${balanceFormatted}`);
+                    console.log(`   Required: ${requiredAmount}`);
+                    console.log(`   Sufficient: ${parseFloat(balanceFormatted) >= requiredAmount ? '✅ Yes' : '❌ No'}`);
+                    if (parseFloat(balanceFormatted) < requiredAmount) {
+                        return JSON.stringify({
+                            success: false,
+                            error: `Insufficient USDC balance. Required: ${requiredAmount}, Available: ${balanceFormatted}`
+                        });
+                    }
+                }
+                catch (error) {
+                    console.log('   ❌ Error checking USDC balance:', error);
+                }
+            }
+            console.log('💰 ExecuteSwapTool: Getting swap quote...');
             const quote = await SwapService.getSwapQuote({
                 fromToken: mappedFromToken,
                 toToken: mappedToToken,
                 fromAmount,
                 slippage: slippageNumber
             });
-            const validation = await SwapService.validateSwap(userModel, {
-                fromToken: mappedFromToken,
-                toToken: mappedToToken,
-                fromAmount,
-                slippage: slippageNumber
+            console.log('✅ ExecuteSwapTool: Quote received successfully');
+            console.log('   Quote details:', {
+                fromAmount: quote.fromAmountFormatted,
+                toAmount: quote.toAmountFormatted,
+                price: quote.price,
+                path: quote.path
             });
-            if (!validation.valid) {
-                return JSON.stringify({
-                    success: false,
-                    error: validation.error || 'Swap validation failed',
-                    warnings: validation.warnings,
-                    balance: validation.balance,
-                    allowance: validation.allowance,
-                    needsApproval: validation.needsApproval
-                });
-            }
+            console.log('🚀 ExecuteSwapTool: Executing swap transaction...');
             const swapResult = await SwapService.executeSwap(userModel, {
                 fromToken: mappedFromToken,
                 toToken: mappedToToken,
                 fromAmount,
                 slippage: slippageNumber
             });
+            console.log('📊 ExecuteSwapTool: Swap result received');
+            console.log('   Success:', swapResult.success);
+            console.log('   Transaction hash:', swapResult.transactionHash);
+            console.log('   Error:', swapResult.error);
+            console.log('   Error code:', swapResult.errorCode);
             if (swapResult.success) {
+                console.log('✅ ExecuteSwapTool: Swap successful!');
+                console.log('   Transaction hash:', swapResult.transactionHash);
+                console.log('   From amount:', swapResult.fromAmount);
+                console.log('   To amount:', swapResult.toAmount);
+                console.log('   Gas used:', swapResult.gasUsed);
+                console.log('   Gas price:', swapResult.gasPrice);
+                console.log('   Unwrap hash:', swapResult.unwrapTransactionHash || 'None');
+                console.log('   Final token:', swapResult.finalToken || 'Not specified');
                 try {
+                    console.log('📡 ExecuteSwapTool: Emitting real-time events...');
                     const io = getIO();
                     emitTransactionSuccess(io, user.walletAddress, {
                         transactionHash: swapResult.transactionHash,
@@ -1359,9 +1467,14 @@ class ExecuteSwapTool extends StructuredTool {
                     }, 1000);
                 }
                 catch (socketError) {
-                    console.error('Error emitting real-time events:', socketError);
+                    console.error('❌ ExecuteSwapTool: Error emitting real-time events:', socketError);
                 }
-                return JSON.stringify({
+                console.log('📝 ExecuteSwapTool: Building success response...');
+                let message = `Successfully swapped ${fromAmount} ${fromToken} for ${swapResult.toAmount} ${toToken}`;
+                if (swapResult.unwrapTransactionHash) {
+                    message += ` (converted to native XFI)`;
+                }
+                const result = {
                     success: true,
                     transactionHash: swapResult.transactionHash,
                     fromToken,
@@ -1371,10 +1484,20 @@ class ExecuteSwapTool extends StructuredTool {
                     gasUsed: swapResult.gasUsed,
                     gasPrice: swapResult.gasPrice,
                     explorerUrl: `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${swapResult.transactionHash}`,
-                    message: `Successfully swapped ${fromAmount} ${fromToken} for ${swapResult.toAmount} ${toToken}`
-                });
+                    message
+                };
+                if (swapResult.unwrapTransactionHash) {
+                    result.unwrapTransactionHash = swapResult.unwrapTransactionHash;
+                    result.unwrapExplorerUrl = `${process.env.ENVIRONMENT === 'production' ? 'https://xfiscan.com' : 'https://test.xfiscan.com'}/tx/${swapResult.unwrapTransactionHash}`;
+                    result.finalToken = swapResult.finalToken;
+                }
+                console.log('✅ ExecuteSwapTool: Returning success response');
+                return JSON.stringify(result);
             }
             else {
+                console.log('❌ ExecuteSwapTool: Swap failed');
+                console.log('   Error:', swapResult.error);
+                console.log('   Error code:', swapResult.errorCode);
                 return JSON.stringify({
                     success: false,
                     error: swapResult.error || 'Swap execution failed',
@@ -1383,7 +1506,9 @@ class ExecuteSwapTool extends StructuredTool {
             }
         }
         catch (error) {
-            console.error('Error in execute_swap:', error);
+            console.error('❌ ExecuteSwapTool: Unexpected error:', error);
+            console.error('   Error message:', error.message);
+            console.error('   Error stack:', error.stack);
             return JSON.stringify({
                 success: false,
                 error: error.message
@@ -1393,21 +1518,25 @@ class ExecuteSwapTool extends StructuredTool {
 }
 class GetSupportedSwapTokensTool extends StructuredTool {
     name = "get_supported_swap_tokens";
-    description = "Gets the list of supported tokens for swapping";
+    description = "Gets the list of supported tokens for swapping. PRIMARY PAIRS: USDC↔XFI (recommended for stablecoin swaps). Note: USDT is temporarily disabled due to incorrect pricing.";
     schema = z.object({});
     async _call(input, runManager) {
         try {
             const supportedTokens = SwapService.getSupportedPairs();
             const swapConfig = SwapService.getSwapConfig();
+            const filteredPairs = supportedTokens.filter(pair => pair.from !== 'USDT' && pair.to !== 'USDT');
             return JSON.stringify({
                 success: true,
                 supportedTokens: swapConfig.SUPPORTED_TOKENS,
-                tradingPairs: supportedTokens.map(pair => ({
+                tradingPairs: filteredPairs.map(pair => ({
                     from: pair.from,
                     to: pair.to,
                     description: pair.description
                 })),
-                totalPairs: supportedTokens.length,
+                totalPairs: filteredPairs.length,
+                primaryPairs: filteredPairs.filter(pair => (pair.from === 'USDC' && pair.to === 'XFI') ||
+                    (pair.from === 'XFI' && pair.to === 'USDC')),
+                note: "USDT swaps are temporarily disabled due to incorrect pricing. USDC↔XFI is the recommended stablecoin pair with accurate pricing (~13.12 XFI per 1 USDC).",
                 config: {
                     defaultSlippage: swapConfig.DEFAULT_SLIPPAGE,
                     minSlippage: swapConfig.MIN_SLIPPAGE,

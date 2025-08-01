@@ -332,8 +332,8 @@ export async function getDCAOrderStatus(params: {
  * Provides a quote for immediate token swap
  */
 export async function getSwapQuote(params: {
-  fromToken: 'XFI' | 'CFI' | 'WXFI' | 'FOMO' | 'WETH' | 'USDC' | 'WBTC' | 'USDT' | 'BNB' | 'SOL' | 'XUSD';
-  toToken: 'XFI' | 'CFI' | 'WXFI' | 'FOMO' | 'WETH' | 'USDC' | 'WBTC' | 'USDT' | 'BNB' | 'SOL' | 'XUSD';
+  fromToken: 'XFI' | 'CFI' | 'WXFI' | 'FOMO' | 'WETH' | 'USDC' | 'WBTC' | 'BNB' | 'SOL' | 'XUSD';
+  toToken: 'XFI' | 'CFI' | 'WXFI' | 'FOMO' | 'WETH' | 'USDC' | 'WBTC' | 'BNB' | 'SOL' | 'XUSD';
   amount: string;
   slippage?: number;
 }): Promise<{
@@ -446,7 +446,7 @@ export async function getUserTokenBalances(params: {
       message += `${balance.symbol === 'XFI' ? '🔵' : '🟢'} ${balance.symbol}: ${parseFloat(balance.formatted).toFixed(6)}\n`;
     });
 
-    message += `\n💡 You can create DCA orders to automatically swap between XFI and USDC/USDT based on price triggers.`;
+    message += `\n💡 You can create DCA orders to automatically swap between XFI and USDC based on price triggers. USDC↔XFI is the recommended stablecoin pair with accurate pricing (~13.12 XFI per 1 USDC). Note: USDT is temporarily disabled due to incorrect pricing.`;
 
     return {
       success: true,
