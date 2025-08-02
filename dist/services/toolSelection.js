@@ -87,6 +87,21 @@ class ToolSelectionService {
             ]
         },
         {
+            name: "create_global_payment_link",
+            description: "Create a global payment link that accepts any amount of contributions from multiple users",
+            parameters: [],
+            examples: [
+                "Create a global payment link",
+                "Make a global payment link",
+                "Create global payment link",
+                "Set up a global payment link",
+                "Create donation link",
+                "Make a donation link",
+                "Create global link",
+                "Global payment link"
+            ]
+        },
+        {
             name: "get_payment_link",
             description: "Get information about a payment link including status, amount, and payment history",
             parameters: [

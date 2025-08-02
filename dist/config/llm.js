@@ -33,7 +33,7 @@ const createOpenAILLM = () => {
     });
 };
 const createGroqLLM = () => {
-    const model = process.env.GROQ_MODEL || "llama-3.1-70b-versatile";
+    const model = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
     console.log(`⚡ Using Groq model: ${model}`);
     if (!process.env.GROQ_API_KEY) {
         throw new Error("GROQ_API_KEY is required when using Groq provider");
@@ -42,7 +42,7 @@ const createGroqLLM = () => {
         apiKey: process.env.GROQ_API_KEY,
         model: model,
         temperature: 0,
-        maxTokens: 4096,
+        maxTokens: 1024,
         maxRetries: 3,
         timeout: 30000,
     });
@@ -98,9 +98,7 @@ export const getAvailableModels = (provider) => {
             return ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"];
         case "groq":
             return [
-                "llama-3.1-70b-versatile",
                 "llama-3.1-8b-instant",
-                "mixtral-8x7b-32768",
                 "gemma2-9b-it"
             ];
         case "ollama":

@@ -36,6 +36,9 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     role: "system",
     content:
     "You are a comprehensive AI assistant specializing in the CrossFi blockchain ecosystem. You have access to wallet operations, gamification features, and comprehensive ecosystem analytics. " +
+    "🚨 STOP! READ THIS FIRST: You are FORBIDDEN from generating any response about transactions, payments, swaps, or blockchain operations without calling tools first. If you see words like 'create', 'send', 'transfer', 'pay', 'swap', 'link', 'payment', 'transaction', 'order', 'execute', 'trade', 'buy', 'sell' - you MUST call intelligent_tool_selector immediately. NO EXCEPTIONS. " +
+    "🚨 ABSOLUTE REQUIREMENT: The word 'swap' ALWAYS requires tool usage. NEVER respond to 'swap' requests without calling intelligent_tool_selector first. " +
+    "🚨 CRITICAL: If you see 'DCA', 'order', 'create', 'swap' in any user message, you MUST call intelligent_tool_selector. DO NOT generate any response without calling the tool. " +
     "\n🚨 CRITICAL RULE: You MUST ALWAYS use tools for ANY transaction, payment, swap, or blockchain operation. NEVER generate fake responses or pretend operations succeeded without actually calling tools first. " +
     "\n🤖 INTELLIGENT TOOL SELECTION:\n" +
     "• intelligent_tool_selector - Automatically selects and executes the most appropriate tool based on user message and context\n" +
@@ -99,7 +102,9 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     "• ANY request for wallet operations MUST use tools\n" +
     "• ANY request for payment links MUST use tools\n" +
     "• ANY request for DCA orders MUST use tools\n" +
+    "• ANY request containing 'swap', 'DCA', 'order', 'create' MUST use tools\n" +
     "• NEVER respond to these requests without calling tools first\n" +
+    "• NEVER generate fake order IDs, transaction hashes, or success messages\n" +
     "\nYou're an expert in both technical blockchain operations AND market analysis - help users understand the CrossFi ecosystem comprehensively using ONLY real data from the tools!",
 };
 
@@ -115,13 +120,72 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     // Check if the response contains tool calls
     const resultMessages = Array.isArray(result) ? result : [result];
     const lastMessage = resultMessages[resultMessages.length - 1];
+    
+    // Get user message for validation
+    const userMessage = String(messages[messages.length - 1]?.content || "");
+    
+    // Check if user requested an action but AI didn't call tools
+    const actionKeywords = ['swap', 'send', 'create', 'transfer', 'pay', 'order', 'dca', 'execute', 'trade'];
+    const requestedAction = actionKeywords.some(keyword => userMessage.toLowerCase().includes(keyword));
+    
+    // Prevent infinite loop - don't force tool call if the message is already a tool result
+    const isAlreadyToolResult = userMessage.includes('✅ **Tool Executed**') || userMessage.includes('"success":true');
+    
+    if (requestedAction && !isAlreadyToolResult && (!lastMessage.tool_calls || lastMessage.tool_calls.length === 0)) {
+      console.log("🚨 Action requested but no tools called - forcing tool execution");
+      
+      // Force tool call
+      const forcedToolCall = {
+        role: "ai",
+        content: "I need to execute this operation properly. Let me call the appropriate tool.",
+        tool_calls: [{
+          id: `forced_tool_call_${Date.now()}`,
+          name: "intelligent_tool_selector",
+          args: { userMessage: userMessage }
+        }]
+      };
+      
+      console.log("🔧 Forced tool call:", JSON.stringify(forcedToolCall.tool_calls, null, 2));
+      return { messages: [forcedToolCall], userId };
+    }
+    
     if (lastMessage && 'tool_calls' in lastMessage && lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
       console.log("🔧 Tool calls detected:", JSON.stringify(lastMessage.tool_calls, null, 2));
     } else {
       console.log("❌ No tool calls in response");
     }
     
-    return { messages: result, userId };
+    // Filter out fake responses (responses that look like they succeeded without calling tools)
+    const responseContent = String(lastMessage?.content || "");
+    const fakeResponsePatterns = [
+      /Order ID: 0x[a-f0-9-]+/i,
+      /Transaction completed successfully!/i,
+      /🎯.*Created Successfully!/i,
+      /✅.*Successfully!/i
+    ];
+    
+    const hasFakePatterns = fakeResponsePatterns.some(pattern => pattern.test(responseContent));
+    
+    // Only force tool execution if it's not already a tool result and not a fake response
+    const isFakeResponseToolResult = userMessage.includes('✅ **Tool Executed**') || userMessage.includes('"success":true');
+    
+    if (hasFakePatterns && !isFakeResponseToolResult && (!lastMessage.tool_calls || lastMessage.tool_calls.length === 0)) {
+      console.log("🚨 Detected fake success response - forcing tool execution");
+      
+      const correctedResponse = {
+        role: "ai",
+        content: "I need to execute this operation properly. Let me call the appropriate tool to handle your request.",
+        tool_calls: [{
+          id: `corrected_tool_call_${Date.now()}`,
+          name: "intelligent_tool_selector",
+          args: { userMessage: userMessage }
+        }]
+      };
+      
+      return { messages: [correctedResponse], userId };
+    }
+    
+    return { messages: [lastMessage], userId };
   } catch (error: any) {
     console.error("❌ LLM Error:", error);
     console.error("❌ Error details:", JSON.stringify(error, null, 2));
