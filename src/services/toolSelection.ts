@@ -100,20 +100,18 @@ class ToolSelectionService {
       ]
     },
     {
-      name: "create_payment_link",
-      description: "Create a payment link for receiving payments. Supports fixed amounts and flexible amounts (global links)",
+      name: "create_payment_links",
+      description: "Create a payment link. If amount is specified, creates a fixed payment link. If no amount is specified, creates a global payment link that accepts any contributions.",
       parameters: [
-        { name: "type", type: "string", required: true, description: "Type of payment link: 'fixed' or 'global'" },
-        { name: "amount", type: "number", required: false, description: "Amount for fixed payment links" },
-        { name: "title", type: "string", required: false, description: "Title for the payment link" },
-        { name: "description", type: "string", required: false, description: "Description for the payment link" }
+        { name: "amount", type: "string", required: false, description: "Optional: The amount for a fixed payment link in XFI (e.g., '0.1'). If not provided, creates a global payment link." }
       ],
       examples: [
         "Create a payment link for 50 XFI",
         "Make a global payment link for donations",
         "Create a fixed payment link",
         "Set up a payment link for 100 XFI",
-        "Create payment link"
+        "Create payment link",
+        "Create a global payment link"
       ]
     },
     {
@@ -554,7 +552,7 @@ Important:
     
     if (lowerMessage.includes('create') && lowerMessage.includes('payment link')) {
       return {
-        selectedTool: "create_payment_link",
+        selectedTool: "create_payment_links",
         confidence: 0.7,
         parameters: {},
         reasoning: "Fallback: Detected create payment link keywords"
