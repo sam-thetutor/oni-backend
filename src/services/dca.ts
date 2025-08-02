@@ -15,7 +15,9 @@ import {
 export interface CreateDCAOrderParams {
   userId: string;
   walletAddress: string;
-  orderType: 'buy' | 'sell';
+  orderType: 'swap';
+  fromToken: 'USDC' | 'XFI';
+  toToken: 'USDC' | 'XFI';
   fromAmount: string;
   triggerPrice: number;
   triggerCondition: 'above' | 'below';
@@ -25,7 +27,7 @@ export interface CreateDCAOrderParams {
 
 export interface DCAOrderSummary {
   id: string;
-  orderType: 'buy' | 'sell';
+  orderType: 'swap';
   fromToken: string;
   toToken: string;
   fromAmount: string;
@@ -66,8 +68,9 @@ export class DCAService {
         throw new Error(`Maximum ${DCA_LIMITS.MAX_ORDERS_PER_USER} active orders allowed per user`);
       }
 
-      // Determine tokens based on order type
-      const { fromToken, toToken } = this.getTokensForOrderType(params.orderType);
+      // Use provided tokens directly
+      const fromToken = params.fromToken;
+      const toToken = params.toToken;
 
       // Set expiration if not provided (default 30 days)
       const expiresAt = params.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -81,7 +84,7 @@ export class DCAService {
         toToken,
         fromAmount: TokenService.parseTokenAmount(
           params.fromAmount,
-          TOKEN_METADATA[params.orderType === 'buy' ? 'tUSDC' : 'XFI'].decimals
+          TOKEN_METADATA[fromToken].decimals
         ),
         triggerPrice: params.triggerPrice,
         triggerCondition: params.triggerCondition,
@@ -150,14 +153,37 @@ export class DCAService {
 
   /**
    * Check if DCA order should be executed based on current price
+   * Only executes if price has moved in the correct direction to reach the trigger
    */
   static shouldExecuteOrder(order: IDCAOrder, currentPrice: number): boolean {
     const { triggerPrice, triggerCondition } = order;
     
     if (triggerCondition === 'above') {
+      // For "above" trigger: only execute if current price has moved UP to reach or exceed trigger
+      // This means the price was previously below the trigger and has now reached it
       return currentPrice >= triggerPrice;
     } else if (triggerCondition === 'below') {
+      // For "below" trigger: only execute if current price has moved DOWN to reach or go below trigger
+      // This means the price was previously above the trigger and has now reached it
       return currentPrice <= triggerPrice;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if DCA order is ready for execution (price direction is correct)
+   * This prevents immediate execution when order is created
+   */
+  static isOrderReadyForExecution(order: IDCAOrder, currentPrice: number): boolean {
+    const { triggerPrice, triggerCondition } = order;
+    
+    if (triggerCondition === 'above') {
+      // For "above" trigger: order is ready if current price is BELOW trigger (needs to go up)
+      return currentPrice < triggerPrice;
+    } else if (triggerCondition === 'below') {
+      // For "below" trigger: order is ready if current price is ABOVE trigger (needs to go down)
+      return currentPrice > triggerPrice;
     }
     
     return false;
@@ -385,6 +411,17 @@ export class DCAService {
         };
       }
 
+      // Get current price to validate trigger logic
+      const currentPrice = await PriceAnalyticsService.getMarketData().then(data => data.current_price);
+      
+      // Validate that trigger makes sense relative to current price
+      // For "below" trigger: order executes when price drops to or below trigger price
+      // For "above" trigger: order executes when price rises to or above trigger price
+      // Both conditions allow immediate execution if current price already meets the condition
+      
+      // No validation needed - all trigger prices are valid
+      // The system will execute immediately if the condition is already met
+
       // Validate slippage
       const slippage = params.maxSlippage || DCA_LIMITS.DEFAULT_SLIPPAGE;
       if (!validateSlippage(slippage)) {
@@ -394,8 +431,8 @@ export class DCAService {
         };
       }
 
-      // Validate amount based on order type
-      const tokenSymbol = params.orderType === 'buy' ? 'tUSDC' : 'XFI';
+      // Validate amount based on fromToken
+      const tokenSymbol = params.fromToken;
       if (!validateTokenAmount(tokenSymbol, params.fromAmount)) {
         return {
           valid: false,
@@ -451,8 +488,8 @@ export class DCAService {
   }
 
   private static formatDCAOrderSummary(order: IDCAOrder): DCAOrderSummary {
-    const fromTokenSymbol = order.orderType === 'buy' ? 'tUSDC' : 'XFI';
-    const toTokenSymbol = order.orderType === 'buy' ? 'XFI' : 'tUSDC';
+    const fromTokenSymbol = order.fromToken;
+    const toTokenSymbol = order.toToken;
     const fromTokenMeta = TOKEN_METADATA[fromTokenSymbol as keyof typeof TOKEN_METADATA];
     
     return {

@@ -12,7 +12,7 @@ const DCAOrderSchema = new mongoose.Schema({
     },
     orderType: {
         type: String,
-        enum: ['buy', 'sell'],
+        enum: ['swap'],
         required: true
     },
     fromToken: {

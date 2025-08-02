@@ -13,6 +13,8 @@ const llm = createLLM();
 const toolNode = new ToolNode(ALL_TOOLS_LIST_WITH_INTELLIGENT);
 const callModel = async (state) => {
     const { messages, userId } = state;
+    console.log("🔍 callModel invoked with userId:", userId);
+    console.log("📨 Messages:", JSON.stringify(messages, null, 2));
     const systemMessage = {
         role: "system",
         content: "You are a comprehensive AI assistant specializing in the CrossFi blockchain ecosystem. You have access to wallet operations, gamification features, and comprehensive ecosystem analytics. " +
@@ -66,12 +68,25 @@ const callModel = async (state) => {
             "\nYou're an expert in both technical blockchain operations AND market analysis - help users understand the CrossFi ecosystem comprehensively!",
     };
     try {
+        console.log("🤖 Binding tools to LLM...");
         const llmWithTools = llm.bindTools(ALL_TOOLS_LIST_WITH_INTELLIGENT);
+        console.log("✅ Tools bound successfully");
+        console.log("🚀 Invoking LLM with tools...");
         const result = await llmWithTools.invoke([systemMessage, ...messages]);
+        console.log("📤 LLM Response:", JSON.stringify(result, null, 2));
+        const resultMessages = Array.isArray(result) ? result : [result];
+        const lastMessage = resultMessages[resultMessages.length - 1];
+        if (lastMessage && 'tool_calls' in lastMessage && lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
+            console.log("🔧 Tool calls detected:", JSON.stringify(lastMessage.tool_calls, null, 2));
+        }
+        else {
+            console.log("❌ No tool calls in response");
+        }
         return { messages: result, userId };
     }
     catch (error) {
-        console.error("LLM Error:", error);
+        console.error("❌ LLM Error:", error);
+        console.error("❌ Error details:", JSON.stringify(error, null, 2));
         if (error.message?.includes("Rate limit") ||
             error.message?.includes("429") ||
             error.message?.includes("500648")) {
@@ -134,6 +149,7 @@ const shouldContinue = (state) => {
 };
 const customToolNode = async (state) => {
     const { messages, userId } = state;
+    console.log("customToolNode invoked with messages:", JSON.stringify(messages, null, 2), "userId:", userId);
     setCurrentUserFrontendWalletAddress(userId);
     const result = await toolNode.invoke(messages);
     console.log("Tool execution result:", JSON.stringify(result, null, 2));

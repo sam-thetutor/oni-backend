@@ -17,7 +17,8 @@ export class DCAService {
             if (existingOrders.length >= DCA_LIMITS.MAX_ORDERS_PER_USER) {
                 throw new Error(`Maximum ${DCA_LIMITS.MAX_ORDERS_PER_USER} active orders allowed per user`);
             }
-            const { fromToken, toToken } = this.getTokensForOrderType(params.orderType);
+            const fromToken = params.fromToken;
+            const toToken = params.toToken;
             const expiresAt = params.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
             const dcaOrder = new DCAOrder({
                 userId: params.userId,
@@ -25,7 +26,7 @@ export class DCAService {
                 orderType: params.orderType,
                 fromToken,
                 toToken,
-                fromAmount: TokenService.parseTokenAmount(params.fromAmount, TOKEN_METADATA[params.orderType === 'buy' ? 'tUSDC' : 'XFI'].decimals),
+                fromAmount: TokenService.parseTokenAmount(params.fromAmount, TOKEN_METADATA[fromToken].decimals),
                 triggerPrice: params.triggerPrice,
                 triggerCondition: params.triggerCondition,
                 maxSlippage: params.maxSlippage || DCA_LIMITS.DEFAULT_SLIPPAGE,
@@ -82,6 +83,16 @@ export class DCAService {
         }
         else if (triggerCondition === 'below') {
             return currentPrice <= triggerPrice;
+        }
+        return false;
+    }
+    static isOrderReadyForExecution(order, currentPrice) {
+        const { triggerPrice, triggerCondition } = order;
+        if (triggerCondition === 'above') {
+            return currentPrice < triggerPrice;
+        }
+        else if (triggerCondition === 'below') {
+            return currentPrice > triggerPrice;
         }
         return false;
     }
@@ -236,6 +247,7 @@ export class DCAService {
                     error: `Trigger price must be between $${DCA_LIMITS.MIN_TRIGGER_PRICE} and $${DCA_LIMITS.MAX_TRIGGER_PRICE}`
                 };
             }
+            const currentPrice = await PriceAnalyticsService.getMarketData().then(data => data.current_price);
             const slippage = params.maxSlippage || DCA_LIMITS.DEFAULT_SLIPPAGE;
             if (!validateSlippage(slippage)) {
                 return {
@@ -243,7 +255,7 @@ export class DCAService {
                     error: `Slippage must be between ${DCA_LIMITS.MIN_SLIPPAGE}% and ${DCA_LIMITS.MAX_SLIPPAGE}%`
                 };
             }
-            const tokenSymbol = params.orderType === 'buy' ? 'tUSDC' : 'XFI';
+            const tokenSymbol = params.fromToken;
             if (!validateTokenAmount(tokenSymbol, params.fromAmount)) {
                 return {
                     valid: false,
@@ -290,8 +302,8 @@ export class DCAService {
         }
     }
     static formatDCAOrderSummary(order) {
-        const fromTokenSymbol = order.orderType === 'buy' ? 'tUSDC' : 'XFI';
-        const toTokenSymbol = order.orderType === 'buy' ? 'XFI' : 'tUSDC';
+        const fromTokenSymbol = order.fromToken;
+        const toTokenSymbol = order.toToken;
         const fromTokenMeta = TOKEN_METADATA[fromTokenSymbol];
         return {
             id: order._id.toString(),

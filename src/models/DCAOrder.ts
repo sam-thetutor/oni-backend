@@ -3,9 +3,9 @@ import mongoose from 'mongoose';
 export interface IDCAOrder extends mongoose.Document {
   userId: string; // Privy ID of the user
   walletAddress: string; // User's wallet address
-  orderType: 'buy' | 'sell'; // Buy XFI with tUSDC or sell XFI for tUSDC
-  fromToken: string; // Token address being sold (tUSDC or XFI)
-  toToken: string; // Token address being bought (XFI or tUSDC)
+  orderType: 'swap'; // Swap between USDC and XFI
+  fromToken: string; // Token symbol being swapped from (USDC or XFI)
+  toToken: string; // Token symbol being swapped to (USDC or XFI)
   fromAmount: string; // Amount to swap (in wei/smallest unit)
   triggerPrice: number; // XFI price in USD that triggers the order
   triggerCondition: 'above' | 'below'; // Execute when price goes above or below
@@ -36,7 +36,7 @@ const DCAOrderSchema = new mongoose.Schema({
   },
   orderType: { 
     type: String, 
-    enum: ['buy', 'sell'], 
+    enum: ['swap'], 
     required: true 
   },
   fromToken: { 

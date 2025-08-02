@@ -679,7 +679,7 @@ class CreatePaymentLinksTool extends StructuredTool {
             const isGlobal = !amount || amount.trim() === '';
             if (isGlobal) {
                 const transactionHash = await PaymentLinkService.createGlobalPaymentLinkOnChain(walletForOps.privateKey, paymentLinkID);
-                const paymentLink = await PaymentLinkService.createGlobalPaymentLink(frontendWalletAddress, paymentLinkID);
+                const paymentLink = await PaymentLinkService.createGlobalPaymentLink(user.walletAddress, paymentLinkID);
                 return JSON.stringify({
                     success: true,
                     linkID: paymentLinkID,
@@ -695,7 +695,7 @@ class CreatePaymentLinksTool extends StructuredTool {
             }
             else {
                 const transactionHash = await PaymentLinkService.createPaymentLinkOnChain(walletForOps.privateKey, paymentLinkID, amount);
-                const paymentLink = await PaymentLinkService.createPaymentLink(frontendWalletAddress, Number(amount), paymentLinkID);
+                const paymentLink = await PaymentLinkService.createPaymentLink(user.walletAddress, Number(amount), paymentLinkID);
                 return JSON.stringify({
                     success: true,
                     linkID: paymentLinkID,
@@ -1007,14 +1007,16 @@ class CheckPaymentLinkStatusTool extends StructuredTool {
 }
 class CreateDCAOrderTool extends StructuredTool {
     name = "create_dca_order";
-    description = "Creates an automated DCA (Dollar Cost Averaging) order to buy or sell XFI when the price reaches a trigger condition. Users can say things like 'buy 10 USDC when XFI hits $0.05' or 'sell 5 XFI if price drops below $0.04'";
+    description = "Creates an automated DCA (Dollar Cost Averaging) order to swap tokens when the price reaches a trigger condition. IMPORTANT: orderType must be 'swap' (not 'buy' or 'sell'). Examples: 'swap 10 USDC to XFI when XFI reaches $0.05' = orderType: 'swap', fromToken: 'USDC', toToken: 'XFI', amount: '10', triggerPrice: 0.05, triggerCondition: 'below'. 'swap 5 XFI to USDC when XFI reaches $0.04' = orderType: 'swap', fromToken: 'XFI', toToken: 'USDC', amount: '5', triggerPrice: 0.04, triggerCondition: 'above'. All numeric values (triggerPrice, slippage, expirationDays) must be numbers, not strings.";
     schema = z.object({
-        orderType: z.enum(["buy", "sell"]).describe("Order type: 'buy' or 'sell'"),
-        amount: z.string().describe("Amount to buy or sell"),
-        triggerPrice: z.number().describe("Trigger price for the order"),
-        triggerCondition: z.enum(["above", "below"]).describe("Trigger condition: 'above' or 'below'"),
-        slippage: z.number().optional().describe("Maximum slippage percentage (default: 5%)"),
-        expirationDays: z.number().optional().describe("Order expiration in days (default: 30)")
+        orderType: z.enum(["swap"]).describe("Order type: 'swap' (swap between USDC and XFI)"),
+        fromToken: z.enum(["USDC", "XFI"]).describe("Token to swap from: 'USDC' or 'XFI'"),
+        toToken: z.enum(["USDC", "XFI"]).describe("Token to swap to: 'USDC' or 'XFI'"),
+        amount: z.string().describe("Amount to swap (e.g., '10' for 10 USDC or '5' for 5 XFI)"),
+        triggerPrice: z.number().describe("Trigger price in USD (e.g., 0.05 for $0.05)"),
+        triggerCondition: z.enum(["above", "below"]).describe("Trigger condition: 'above' (execute when price goes above trigger) or 'below' (execute when price goes below trigger)"),
+        slippage: z.number().optional().describe("Maximum slippage percentage as number (e.g., 5 for 5%, default: 5)"),
+        expirationDays: z.number().optional().describe("Order expiration in days as number (e.g., 30 for 30 days, default: 30)")
     });
     async _call(input, runManager) {
         try {
@@ -1023,18 +1025,39 @@ class CreateDCAOrderTool extends StructuredTool {
                 return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
             }
             const { orderType, amount, triggerPrice, triggerCondition, slippage, expirationDays } = input;
-            if (!orderType || !amount || triggerPrice === undefined || !triggerCondition) {
-                return JSON.stringify({ success: false, error: 'Missing required DCA order fields.' });
+            if (!orderType) {
+                return JSON.stringify({ success: false, error: 'Missing orderType. Must be "swap".' });
+            }
+            if (orderType !== 'swap') {
+                return JSON.stringify({ success: false, error: `Invalid orderType: "${orderType}". Must be "swap".` });
+            }
+            if (!amount) {
+                return JSON.stringify({ success: false, error: 'Missing amount to swap.' });
+            }
+            if (triggerPrice === undefined || triggerPrice === null) {
+                return JSON.stringify({ success: false, error: 'Missing triggerPrice. Must be a number (e.g., 0.05 for $0.05).' });
+            }
+            if (typeof triggerPrice !== 'number') {
+                return JSON.stringify({ success: false, error: `Invalid triggerPrice: "${triggerPrice}". Must be a number, not a string.` });
+            }
+            if (!triggerCondition) {
+                return JSON.stringify({ success: false, error: 'Missing triggerCondition. Must be "above" or "below".' });
+            }
+            if (triggerCondition !== 'above' && triggerCondition !== 'below') {
+                return JSON.stringify({ success: false, error: `Invalid triggerCondition: "${triggerCondition}". Must be "above" or "below".` });
             }
             const params = {
                 userId: frontendWalletAddress,
                 orderType,
+                fromToken: input.fromToken,
+                toToken: input.toToken,
                 amount,
                 triggerPrice,
                 triggerCondition,
                 slippage,
                 expirationDays
             };
+            console.log(`🔍 CreateDCAOrderTool: Creating DCA order with params:`, params);
             const result = await createDCAOrder(params);
             return JSON.stringify(result);
         }

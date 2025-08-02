@@ -189,22 +189,19 @@ export const validateTriggerPrice = async (req: Request, res: Response, next: Ne
     }
 
     // Check if trigger would execute immediately
+    // Allow immediate execution for DCA orders - this is a valid use case
     const wouldExecuteImmediately = 
       (triggerCondition === 'above' && currentPrice >= triggerPrice) ||
       (triggerCondition === 'below' && currentPrice <= triggerPrice);
     
     if (wouldExecuteImmediately) {
-      return res.status(400).json({
-        error: 'Invalid trigger condition: Order would execute immediately',
-        details: {
-          currentPrice,
-          triggerPrice,
-          triggerCondition,
-          suggestion: triggerCondition === 'above' 
-            ? `Set trigger price above $${currentPrice.toFixed(6)}` 
-            : `Set trigger price below $${currentPrice.toFixed(6)}`
-        }
-      });
+      // Add a warning but don't block the order
+      (req as any).immediateExecutionWarning = {
+        message: 'Order will execute immediately at current market price',
+        currentPrice,
+        triggerPrice,
+        triggerCondition
+      };
     }
 
     next();

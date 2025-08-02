@@ -124,17 +124,12 @@ export const validateTriggerPrice = async (req, res, next) => {
         const wouldExecuteImmediately = (triggerCondition === 'above' && currentPrice >= triggerPrice) ||
             (triggerCondition === 'below' && currentPrice <= triggerPrice);
         if (wouldExecuteImmediately) {
-            return res.status(400).json({
-                error: 'Invalid trigger condition: Order would execute immediately',
-                details: {
-                    currentPrice,
-                    triggerPrice,
-                    triggerCondition,
-                    suggestion: triggerCondition === 'above'
-                        ? `Set trigger price above $${currentPrice.toFixed(6)}`
-                        : `Set trigger price below $${currentPrice.toFixed(6)}`
-                }
-            });
+            req.immediateExecutionWarning = {
+                message: 'Order will execute immediately at current market price',
+                currentPrice,
+                triggerPrice,
+                triggerCondition
+            };
         }
         next();
     }

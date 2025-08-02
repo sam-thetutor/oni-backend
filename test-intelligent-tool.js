@@ -1,5 +1,5 @@
 import { config } from 'dotenv';
-import toolSelectionService from './src/services/toolSelection.js';
+import toolSelectionService from './dist/services/toolSelection.js';
 
 config();
 

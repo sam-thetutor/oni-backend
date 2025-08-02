@@ -1,82 +1,40 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
+import { config } from 'dotenv';
+import { getCurrentProvider, getAvailableModels } from './dist/config/llm.js';
 
-console.log('🤖 LLM Provider Switch Script');
-console.log('==============================');
+config();
 
-// Read current .env file
-const envPath = path.join(__dirname, '.env');
-let envContent = '';
+console.log('🔄 LLM Provider Switcher\n');
 
-try {
-  envContent = fs.readFileSync(envPath, 'utf8');
-} catch (error) {
-  console.error('❌ Could not read .env file');
-  process.exit(1);
-}
+const currentProvider = getCurrentProvider();
+console.log(`Current provider: ${currentProvider.toUpperCase()}`);
 
-// Find current provider
-const currentProviderMatch = envContent.match(/LLM_PROVIDER=(\w+)/);
-const currentProvider = currentProviderMatch ? currentProviderMatch[1] : 'groq';
-console.log(`Current provider: ${currentProvider}`);
+console.log('\n📋 Available Providers:');
+console.log('1. OpenAI (Best function calling support)');
+console.log('2. Groq (Cost-effective, limited function calling)');
+console.log('3. Ollama (Local, requires setup)\n');
 
-console.log('\nAvailable providers:');
-console.log('1. groq (cheapest, fast)');
-console.log('2. openai (most reliable, expensive)');
-console.log('3. ollama (local, free)');
+console.log('🔧 To switch providers, set the LLM_PROVIDER environment variable:');
+console.log('');
+console.log('For OpenAI (Recommended for function calling):');
+console.log('export LLM_PROVIDER=openai');
+console.log('export OPENAI_API_KEY=your_openai_api_key');
+console.log('');
+console.log('For Groq (Limited function calling):');
+console.log('export LLM_PROVIDER=groq');
+console.log('export GROQ_API_KEY=your_groq_api_key');
+console.log('export GROQ_MODEL=mixtral-8x7b-32768');
+console.log('');
+console.log('For Ollama (Local):');
+console.log('export LLM_PROVIDER=ollama');
+console.log('export OLLAMA_MODEL=llama3.1:8b');
+console.log('');
 
-// Get user input
-const readline = require('readline');
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+console.log('⚠️  IMPORTANT: Groq models have limited function calling support.');
+console.log('   If you\'re experiencing issues with tool execution, switch to OpenAI.');
+console.log('');
 
-rl.question('\nEnter provider number (1-3): ', (choice) => {
-  let newProvider = '';
-  
-  switch (choice) {
-    case '1':
-      newProvider = 'groq';
-      break;
-    case '2':
-      newProvider = 'openai';
-      break;
-    case '3':
-      newProvider = 'ollama';
-      break;
-    default:
-      console.log('❌ Invalid choice. No changes made.');
-      rl.close();
-      return;
-  }
-  
-  // Update .env file
-  const updatedContent = envContent.replace(
-    /LLM_PROVIDER=\w+/,
-    `LLM_PROVIDER=${newProvider}`
-  );
-  
-  try {
-    fs.writeFileSync(envPath, updatedContent);
-    console.log(`✅ Switched to ${newProvider.toUpperCase()}`);
-    
-    if (newProvider === 'groq') {
-      console.log('💡 Make sure you have GROQ_API_KEY set in your .env file');
-    } else if (newProvider === 'openai') {
-      console.log('💡 Make sure you have OPENAI_API_KEY set in your .env file');
-    } else if (newProvider === 'ollama') {
-      console.log('💡 Make sure Ollama is running locally (ollama serve)');
-    }
-    
-    console.log('\n🔄 Restart your backend to apply changes:');
-    console.log('   cd backend && npm run dev');
-    
-  } catch (error) {
-    console.error('❌ Failed to update .env file:', error.message);
-  }
-  
-  rl.close();
-}); 
+const availableModels = getAvailableModels(currentProvider);
+console.log(`📱 Available models for ${currentProvider}:`);
+availableModels.forEach(model => console.log(`   - ${model}`)); 

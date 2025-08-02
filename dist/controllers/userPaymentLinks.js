@@ -18,7 +18,7 @@ export class UserPaymentLinksController {
             }
             const { page, limit, type } = getPaginationSchema.parse(req.query);
             const offset = (page - 1) * limit;
-            let filter = { userId: user.id };
+            let filter = { userId: user.walletAddress };
             if (type === 'fixed') {
                 filter.amount = { $gt: 0 };
             }
@@ -114,7 +114,7 @@ export class UserPaymentLinksController {
             }
             const paymentLink = await PaymentLink.findOne({
                 linkId: linkId,
-                userId: user.id
+                userId: user.walletAddress
             }).lean();
             if (!paymentLink) {
                 return res.status(404).json({
@@ -192,7 +192,7 @@ export class UserPaymentLinksController {
                     error: 'Database not connected'
                 });
             }
-            const paymentLinks = await PaymentLink.find({ userId: user.id }).lean();
+            const paymentLinks = await PaymentLink.find({ userId: user.walletAddress }).lean();
             const fixedLinks = paymentLinks.filter(link => link.amount > 0);
             const globalLinks = paymentLinks.filter(link => link.amount === 0);
             const stats = {
@@ -278,7 +278,7 @@ export class UserPaymentLinksController {
             }
             const paymentLink = await PaymentLink.findOneAndUpdate({
                 linkId: linkId,
-                userId: user.id
+                userId: user.walletAddress
             }, {
                 status: 'cancelled',
                 updatedAt: new Date()

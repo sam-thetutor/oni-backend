@@ -7,7 +7,7 @@ import { TokenService } from '../services/tokens.js';
 export class DCAController {
     static async createOrder(req, res) {
         try {
-            const { orderType, amount, triggerPrice, triggerCondition, slippage, expirationDays } = req.body;
+            const { orderType, fromToken, toToken, amount, triggerPrice, triggerCondition, slippage, expirationDays } = req.body;
             const frontendWalletAddress = req.user?.frontendWalletAddress;
             if (!frontendWalletAddress) {
                 res.status(401).json({ error: 'User not authenticated' });
@@ -19,8 +19,8 @@ export class DCAController {
                 });
                 return;
             }
-            if (!['buy', 'sell'].includes(orderType)) {
-                res.status(400).json({ error: 'Invalid order type. Must be "buy" or "sell"' });
+            if (orderType !== 'swap') {
+                res.status(400).json({ error: 'Invalid order type. Must be "swap"' });
                 return;
             }
             if (!['above', 'below'].includes(triggerCondition)) {
@@ -48,9 +48,11 @@ export class DCAController {
                 ? new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000)
                 : undefined;
             const dcaParams = {
-                userId: frontendWalletAddress,
+                userId: user.walletAddress,
                 walletAddress: user.walletAddress,
                 orderType,
+                fromToken,
+                toToken,
                 fromAmount: amount.toString(),
                 triggerPrice: parseFloat(triggerPrice),
                 triggerCondition,
@@ -89,10 +91,15 @@ export class DCAController {
                 res.status(401).json({ error: 'User not authenticated' });
                 return;
             }
-            const orders = await DCAService.getUserDCAOrders(frontendWalletAddress, status, limit ? parseInt(limit) : undefined);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+            if (!user) {
+                res.status(404).json({ error: 'User wallet not found' });
+                return;
+            }
+            const orders = await DCAService.getUserDCAOrders(user.walletAddress, status, limit ? parseInt(limit) : undefined);
             res.json({
                 success: true,
-                data: orders,
+                orders: orders,
                 count: orders.length,
             });
         }
@@ -112,7 +119,12 @@ export class DCAController {
                 res.status(401).json({ error: 'User not authenticated' });
                 return;
             }
-            const order = await DCAService.getDCAOrderById(orderId, frontendWalletAddress);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+            if (!user) {
+                res.status(404).json({ error: 'User wallet not found' });
+                return;
+            }
+            const order = await DCAService.getDCAOrderById(orderId, user.walletAddress);
             if (!order) {
                 res.status(404).json({ error: 'DCA order not found' });
                 return;
@@ -151,7 +163,12 @@ export class DCAController {
                 });
                 return;
             }
-            const updatedOrder = await DCAService.updateDCAOrder(orderId, frontendWalletAddress, updates);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+            if (!user) {
+                res.status(404).json({ error: 'User wallet not found' });
+                return;
+            }
+            const updatedOrder = await DCAService.updateDCAOrder(orderId, user.walletAddress, updates);
             res.json({
                 success: true,
                 message: 'DCA order updated successfully',
@@ -174,7 +191,12 @@ export class DCAController {
                 res.status(401).json({ error: 'User not authenticated' });
                 return;
             }
-            const cancelled = await DCAService.cancelDCAOrder(orderId, frontendWalletAddress);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+            if (!user) {
+                res.status(404).json({ error: 'User wallet not found' });
+                return;
+            }
+            const cancelled = await DCAService.cancelDCAOrder(orderId, user.walletAddress);
             if (!cancelled) {
                 res.status(404).json({ error: 'DCA order not found or cannot be cancelled' });
                 return;
@@ -199,7 +221,12 @@ export class DCAController {
                 res.status(401).json({ error: 'User not authenticated' });
                 return;
             }
-            const stats = await DCAService.getUserDCAStats(frontendWalletAddress);
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+            if (!user) {
+                res.status(404).json({ error: 'User wallet not found' });
+                return;
+            }
+            const stats = await DCAService.getUserDCAStats(user.walletAddress);
             res.json({
                 success: true,
                 data: stats,

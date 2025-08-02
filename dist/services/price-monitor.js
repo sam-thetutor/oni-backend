@@ -63,7 +63,11 @@ export class PriceMonitorService {
             if (activeOrders.length === 0) {
                 return;
             }
-            const eligibleOrders = activeOrders.filter(order => DCAService.shouldExecuteOrder(order, currentPrice));
+            const eligibleOrders = activeOrders.filter(order => {
+                const isReady = DCAService.isOrderReadyForExecution(order, currentPrice);
+                const shouldExecute = DCAService.shouldExecuteOrder(order, currentPrice);
+                return isReady && shouldExecute;
+            });
             console.log(`${eligibleOrders.length} orders are eligible for execution`);
             for (const order of eligibleOrders) {
                 try {

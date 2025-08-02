@@ -17,7 +17,7 @@ const getPaginationSchema = z.object({
 
 interface AuthenticatedRequest extends Request {
   user?: {
-    id: string;
+    frontendWalletAddress: string;
     walletAddress: string;
     email?: string;
     dbUser?: any;
@@ -43,7 +43,7 @@ export class UserPaymentLinksController {
 
 
       // Build query filter
-      let filter: any = { userId: user.id };
+      let filter: any = { userId: user.walletAddress };
       
       // If type is specified and not 'all', filter by amount (global links have amount: 0)
       if (type === 'fixed') {
@@ -164,7 +164,7 @@ export class UserPaymentLinksController {
       // Find the payment link
       const paymentLink = await PaymentLink.findOne({ 
         linkId: linkId,
-        userId: user.id 
+        userId: user.walletAddress 
       }).lean();
 
       if (!paymentLink) {
@@ -258,7 +258,7 @@ export class UserPaymentLinksController {
       }
 
       // Get all user payment links
-      const paymentLinks = await PaymentLink.find({ userId: user.id }).lean();
+      const paymentLinks = await PaymentLink.find({ userId: user.walletAddress }).lean();
 
       // Separate fixed and global links
       const fixedLinks = paymentLinks.filter(link => link.amount > 0);
@@ -369,7 +369,7 @@ export class UserPaymentLinksController {
       const paymentLink = await PaymentLink.findOneAndUpdate(
         { 
           linkId: linkId,
-          userId: user.id 
+          userId: user.walletAddress 
         },
         { 
           status: 'cancelled',
