@@ -16,12 +16,16 @@ import { getIO } from "./socket/index.js";
 import { emitBalanceUpdate, emitNewTransaction, emitPointsEarned, emitTransactionSuccess } from "./socket/events.js";
 import dotenv from 'dotenv';
 import { IntelligentTool } from "./tools/intelligentTool.js";
+import { AnalyticsService } from "./services/analytics.js";
 dotenv.config();
 import { XFIPriceChartTool, XFIMarketDataTool, XFITradingSignalsTool, XFIPricePredictionTool, XFIMarketComparisonTool } from './tools/price-analysis.js';
 import { createDCAOrder, getUserDCAOrders, cancelDCAOrder, getDCAOrderStatus, getSwapQuote, getDCASystemStatus, getUserTokenBalances } from './tools/dca.js';
 let currentUserFrontendWalletAddress = null;
 export const setCurrentUserFrontendWalletAddress = (frontendWalletAddress) => {
     currentUserFrontendWalletAddress = frontendWalletAddress;
+};
+export const getCurrentUserFrontendWalletAddress = () => {
+    return currentUserFrontendWalletAddress;
 };
 class GetWalletInfoTool extends StructuredTool {
     name = "get_wallet_info";
@@ -253,6 +257,12 @@ class SendTransactionTool extends StructuredTool {
                         reason: transaction.reward.reason,
                         transactionHash: transaction.hash
                     });
+                }
+                try {
+                    await AnalyticsService.recordTransaction(frontendWalletAddress, user.walletAddress, amount, 'XFI', 'send', transaction.hash, 'completed');
+                }
+                catch (analyticsError) {
+                    console.warn('⚠️ Failed to record transaction analytics:', analyticsError);
                 }
                 setTimeout(async () => {
                     try {
@@ -680,6 +690,12 @@ class CreatePaymentLinksTool extends StructuredTool {
             if (isGlobal) {
                 const transactionHash = await PaymentLinkService.createGlobalPaymentLinkOnChain(walletForOps.privateKey, paymentLinkID);
                 const paymentLink = await PaymentLinkService.createGlobalPaymentLink(user.walletAddress, paymentLinkID);
+                try {
+                    await AnalyticsService.recordPaymentLink(frontendWalletAddress, user.walletAddress, '0', 'XFI');
+                }
+                catch (analyticsError) {
+                    console.warn('⚠️ Failed to record payment link analytics:', analyticsError);
+                }
                 return JSON.stringify({
                     success: true,
                     linkID: paymentLinkID,
@@ -696,6 +712,12 @@ class CreatePaymentLinksTool extends StructuredTool {
             else {
                 const transactionHash = await PaymentLinkService.createPaymentLinkOnChain(walletForOps.privateKey, paymentLinkID, amount);
                 const paymentLink = await PaymentLinkService.createPaymentLink(user.walletAddress, Number(amount), paymentLinkID);
+                try {
+                    await AnalyticsService.recordPaymentLink(frontendWalletAddress, user.walletAddress, amount, 'XFI');
+                }
+                catch (analyticsError) {
+                    console.warn('⚠️ Failed to record payment link analytics:', analyticsError);
+                }
                 return JSON.stringify({
                     success: true,
                     linkID: paymentLinkID,
@@ -1059,6 +1081,17 @@ class CreateDCAOrderTool extends StructuredTool {
             };
             console.log(`🔍 CreateDCAOrderTool: Creating DCA order with params:`, params);
             const result = await createDCAOrder(params);
+            if (result.success) {
+                try {
+                    const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+                    if (user) {
+                        await AnalyticsService.recordDCAOrder(frontendWalletAddress, user.walletAddress, amount, input.fromToken);
+                    }
+                }
+                catch (analyticsError) {
+                    console.warn('⚠️ Failed to record DCA order analytics:', analyticsError);
+                }
+            }
             return JSON.stringify(result);
         }
         catch (error) {

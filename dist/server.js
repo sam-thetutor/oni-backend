@@ -14,10 +14,12 @@ import userPaymentLinksRoutes from "./routes/userPaymentLinks.js";
 import { priceDataRoutes } from "./routes/price-data.js";
 import dcaRoutes from "./routes/dca.js";
 import swapRoutes from "./routes/swap.js";
+import analyticsRoutes from "./routes/analytics.js";
 import { DCAExecutorService } from "./services/dca-executor.js";
 import { CronService } from "./services/cronService.js";
 import { setUserContext } from "./middleware/setUserContext.js";
 import { initializeSocket, closeSocket } from "./socket/index.js";
+import { AnalyticsService } from "./services/analytics.js";
 config();
 const app = express();
 const server = createServer(app);
@@ -147,10 +149,32 @@ app.use('/api/user/payment-links', setUserContext, userPaymentLinksRoutes);
 app.use('/api/price-data', authenticateToken, setUserContext, priceDataRoutes);
 app.use('/api/dca', authenticateToken, setUserContext, dcaRoutes);
 app.use('/api/swap', swapRoutes);
-app.post('/message', authenticateToken, requireWalletConnection, rateLimitMessages, async (req, res) => {
+app.use('/api/analytics', analyticsRoutes);
+app.post('/message', authenticateToken, requireWalletConnection, setUserContext, rateLimitMessages, async (req, res) => {
     try {
         const { message } = req.body;
         const user = req.user;
+        try {
+            let messageType = 'general';
+            const lowerMessage = message.toLowerCase();
+            if (lowerMessage.includes('balance') || lowerMessage.includes('check') || lowerMessage.includes('show')) {
+                messageType = 'balance_check';
+            }
+            else if (lowerMessage.includes('send') || lowerMessage.includes('transfer') || lowerMessage.includes('transaction')) {
+                messageType = 'transaction';
+            }
+            else if (lowerMessage.includes('payment') || lowerMessage.includes('link')) {
+                messageType = 'payment_link';
+            }
+            else if (lowerMessage.includes('dca') || lowerMessage.includes('order')) {
+                messageType = 'dca';
+            }
+            await AnalyticsService.recordMessage(user.frontendWalletAddress, user.frontendWalletAddress, messageType);
+            console.log(`📊 Analytics recorded: ${messageType} message from ${user.frontendWalletAddress}`);
+        }
+        catch (analyticsError) {
+            console.warn('⚠️ Failed to record analytics for message:', analyticsError);
+        }
         memoryStore.addMessage(user.frontendWalletAddress, new HumanMessage(message));
         const history = memoryStore.getHistory(user.frontendWalletAddress);
         const result = await graph.invoke({
@@ -233,6 +257,13 @@ const startServer = async () => {
         }
         catch (cronError) {
             console.warn('⚠️ Cron service failed to start (continuing without cron):', cronError);
+        }
+        try {
+            await AnalyticsService.initializeAnalytics();
+            console.log('✅ Analytics service initialized');
+        }
+        catch (analyticsError) {
+            console.warn('⚠️ Analytics service failed to start (continuing without analytics):', analyticsError);
         }
         try {
             console.log('🔌 Attempting to initialize WebSocket server...');

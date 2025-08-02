@@ -18,6 +18,7 @@ import { getIO } from "./socket/index.js";
 import { emitBalanceUpdate, emitNewTransaction, emitPointsEarned, emitTransactionSuccess } from "./socket/events.js";
 import dotenv from 'dotenv';
 import { IntelligentTool } from "./tools/intelligentTool.js";
+import { AnalyticsService } from "./services/analytics.js";
 dotenv.config();
 
 // Import new price analysis tools
@@ -46,6 +47,11 @@ let currentUserFrontendWalletAddress: string | null = null;
 // Function to set current user frontend wallet address (called by the graph)
 export const setCurrentUserFrontendWalletAddress = (frontendWalletAddress: string) => {
   currentUserFrontendWalletAddress = frontendWalletAddress;
+};
+
+// Function to get current user frontend wallet address
+export const getCurrentUserFrontendWalletAddress = (): string | null => {
+  return currentUserFrontendWalletAddress;
 };
 
 // Wallet Info Tool
@@ -331,6 +337,21 @@ class SendTransactionTool extends StructuredTool {
             reason: transaction.reward.reason,
             transactionHash: transaction.hash
           });
+        }
+
+        // Record analytics for successful transaction
+        try {
+          await AnalyticsService.recordTransaction(
+            frontendWalletAddress,
+            user.walletAddress,
+            amount,
+            'XFI',
+            'send',
+            transaction.hash,
+            'completed'
+          );
+        } catch (analyticsError) {
+          console.warn('⚠️ Failed to record transaction analytics:', analyticsError);
         }
 
         // Get and emit updated balance
@@ -864,6 +885,18 @@ class CreatePaymentLinksTool extends StructuredTool {
           user.walletAddress, // Use backend wallet address
           paymentLinkID
         );
+        // Record analytics for payment link creation
+        try {
+          await AnalyticsService.recordPaymentLink(
+            frontendWalletAddress,
+            user.walletAddress,
+            '0', // Global links don't have a fixed amount
+            'XFI'
+          );
+        } catch (analyticsError) {
+          console.warn('⚠️ Failed to record payment link analytics:', analyticsError);
+        }
+
         // Return plain JSON (no markdown)
         return JSON.stringify({
           success: true,
@@ -890,6 +923,18 @@ class CreatePaymentLinksTool extends StructuredTool {
           Number(amount), 
           paymentLinkID
         );
+        // Record analytics for payment link creation
+        try {
+          await AnalyticsService.recordPaymentLink(
+            frontendWalletAddress,
+            user.walletAddress,
+            amount,
+            'XFI'
+          );
+        } catch (analyticsError) {
+          console.warn('⚠️ Failed to record payment link analytics:', analyticsError);
+        }
+
         // Return plain JSON (no markdown)
         return JSON.stringify({
           success: true,
@@ -1343,6 +1388,24 @@ class CreateDCAOrderTool extends StructuredTool {
       console.log(`🔍 CreateDCAOrderTool: Creating DCA order with params:`, params);
       
       const result = await createDCAOrder(params);
+      
+      // Record analytics for successful DCA order creation
+      if (result.success) {
+        try {
+          const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+          if (user) {
+            await AnalyticsService.recordDCAOrder(
+              frontendWalletAddress,
+              user.walletAddress,
+              amount,
+              input.fromToken as 'XFI' | 'USDC'
+            );
+          }
+        } catch (analyticsError) {
+          console.warn('⚠️ Failed to record DCA order analytics:', analyticsError);
+        }
+      }
+      
       return JSON.stringify(result);
     } catch (error: any) {
       console.error('Error in create_dca_order:', error);
