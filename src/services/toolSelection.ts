@@ -213,6 +213,107 @@ class ToolSelectionService {
         "My automated orders",
         "DCA orders"
       ]
+    },
+    {
+      name: "get_crossfi_ecosystem_insights",
+      description: "Get comprehensive CrossFi ecosystem analysis including network stats, token holders, validators, staking metrics, and market insights using real-time API data",
+      parameters: [],
+      examples: [
+        "Tell me about CrossFi",
+        "Tell me about XFI",
+        "CrossFi ecosystem overview",
+        "XFI ecosystem overview",
+        "CrossFi network analysis",
+        "XFI network analysis",
+        "CrossFi ecosystem insights",
+        "XFI ecosystem insights",
+        "CrossFi ecosystem summary",
+        "XFI ecosystem summary",
+        "What is CrossFi?",
+        "What is XFI?",
+        "CrossFi information",
+        "XFI information"
+      ]
+    },
+    {
+      name: "get_crossfi_network_stats",
+      description: "Get real-time CrossFi network statistics including block height, validator count, total addresses, and network health metrics from official CrossFi API",
+      parameters: [],
+      examples: [
+        "CrossFi network status",
+        "XFI network status",
+        "CrossFi network stats",
+        "XFI network stats",
+        "CrossFi network health",
+        "XFI network health",
+        "CrossFi block height",
+        "XFI block height",
+        "CrossFi network performance",
+        "XFI network performance",
+        "CrossFi blockchain status",
+        "XFI blockchain status"
+      ]
+    },
+    {
+      name: "get_crossfi_market_data",
+      description: "Get CrossFi market data and price information including XFI token price, market cap, volume, and market trends",
+      parameters: [],
+      examples: [
+        "CrossFi market data",
+        "XFI market data",
+        "XFI price",
+        "CrossFi price",
+        "CrossFi market cap",
+        "XFI market cap",
+        "CrossFi trading volume",
+        "XFI trading volume",
+        "CrossFi market trends",
+        "XFI market trends",
+        "XFI token price",
+        "CrossFi token price",
+        "XFI market information",
+        "CrossFi market information"
+      ]
+    },
+    {
+      name: "get_crossfi_defi_metrics",
+      description: "Analyze CrossFi DeFi ecosystem metrics including Total Value Locked (TVL), active protocols, and staking yields",
+      parameters: [],
+      examples: [
+        "CrossFi DeFi metrics",
+        "XFI DeFi metrics",
+        "CrossFi TVL",
+        "XFI TVL",
+        "CrossFi DeFi protocols",
+        "XFI DeFi protocols",
+        "CrossFi staking yields",
+        "XFI staking yields",
+        "CrossFi DeFi ecosystem",
+        "XFI DeFi ecosystem",
+        "CrossFi staking",
+        "XFI staking",
+        "CrossFi DeFi",
+        "XFI DeFi"
+      ]
+    },
+    {
+      name: "get_crossfi_ecosystem_summary",
+      description: "Generate comprehensive CrossFi ecosystem executive summary with key metrics, opportunities, and strategic insights",
+      parameters: [],
+      examples: [
+        "CrossFi ecosystem summary",
+        "XFI ecosystem summary",
+        "CrossFi executive summary",
+        "XFI executive summary",
+        "CrossFi overview",
+        "XFI overview",
+        "CrossFi analysis",
+        "XFI analysis",
+        "CrossFi insights",
+        "XFI insights",
+        "CrossFi summary",
+        "XFI summary"
+      ]
     }
   ];
 
