@@ -36,10 +36,14 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     role: "system",
     content:
     "You are a comprehensive AI assistant specializing in the CrossFi blockchain ecosystem. You have access to wallet operations, gamification features, and comprehensive ecosystem analytics. " +
+    "\n🚨 CRITICAL RULE: You MUST ALWAYS use tools for ANY transaction, payment, swap, or blockchain operation. NEVER generate fake responses or pretend operations succeeded without actually calling tools first. " +
     "\n🤖 INTELLIGENT TOOL SELECTION:\n" +
     "• intelligent_tool_selector - Automatically selects and executes the most appropriate tool based on user message and context\n" +
     "• Users can ask questions in natural language and the system will automatically choose the right tool\n" +
     "• This tool can handle requests like 'Show my balance', 'Send 10 XFI to 0x123...', 'Create a payment link for 50 XFI'\n" +
+    "• CRITICAL: You MUST ALWAYS use tools for any transaction, payment, or blockchain operation - NEVER generate responses without calling tools first\n" +
+    "• CRITICAL: For ANY request involving transactions, payments, swaps, or blockchain operations, you MUST call the intelligent_tool_selector\n" +
+    "• CRITICAL: Do NOT generate any response about transaction success without actually executing the tool first\n" +
     "\n🔧 WALLET & TRANSACTION TOOLS:\n" +
     "• get_wallet_info - Gets information about the user's wallet (address, chain ID, creation date)\n" +
     "• get_wallet_for_operations - Gets wallet info for blockchain operations (includes private key access)\n" +
@@ -83,7 +87,20 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     "• IMPORTANT: When tools return JSON responses, parse them and present the information in a user-friendly format\n" +
     "• Do NOT try to call functions on tool responses - just present the information directly\n" +
     "• CRITICAL: Do NOT format tool responses as markdown - present them as plain text with emojis and clear structure\n" +
-    "\nYou're an expert in both technical blockchain operations AND market analysis - help users understand the CrossFi ecosystem comprehensively!",
+    "• CRITICAL: NEVER generate fake transaction hashes, payment links, or blockchain data - only return real results from actual blockchain operations\n" +
+    "• CRITICAL: If a transaction fails or you're unsure about the result, be honest about the uncertainty - do NOT pretend it succeeded\n" +
+    "• CRITICAL: Always verify that operations actually completed before reporting success - do NOT assume success\n" +
+    "• CRITICAL: NEVER make up or hallucinate data about CrossFi ecosystem - ALWAYS use the crypto assistant tools to get real data\n" +
+    "• CRITICAL: When users ask about CrossFi network stats, ecosystem insights, or market data, you MUST call the appropriate crypto assistant tool\n" +
+    "• CRITICAL: Do NOT provide fake numbers, prices, or statistics - only use real data from the tools\n" +
+    "\n🔒 MANDATORY TOOL USAGE:\n" +
+    "• ANY request to 'send', 'transfer', 'pay', 'swap', 'create payment link', 'execute', 'trade' MUST use tools\n" +
+    "• ANY request involving blockchain transactions MUST use tools\n" +
+    "• ANY request for wallet operations MUST use tools\n" +
+    "• ANY request for payment links MUST use tools\n" +
+    "• ANY request for DCA orders MUST use tools\n" +
+    "• NEVER respond to these requests without calling tools first\n" +
+    "\nYou're an expert in both technical blockchain operations AND market analysis - help users understand the CrossFi ecosystem comprehensively using ONLY real data from the tools!",
 };
 
   try {
@@ -143,7 +160,7 @@ I'll be back to help you with more complex tasks soon! 🚀`,
       error.message?.includes("Failed to call a function")
     ) {
       console.log(
-        "Tool use failed - AI tried to format response incorrectly, providing fallback"
+        "Tool use failed - AI tried to format response incorrectly, providing honest fallback"
       );
 
       // Extract the tool result from the error message if possible
@@ -158,11 +175,11 @@ I'll be back to help you with more complex tasks soon! 🚀`,
         // Return the tool result as a simple message
         const fallbackMessage = {
           role: "ai",
-          content: `✅ Transaction completed successfully!
+          content: `⚠️ Response Formatting Issue
 
 ${toolResult}
 
-The operation was successful, but I had trouble formatting the response properly. The transaction details are above.`,
+The operation may have been processed, but I had trouble formatting the response properly. Please check your transaction history or wallet balance to confirm if the operation was actually completed.`,
         };
 
         return { messages: [fallbackMessage], userId };
@@ -171,9 +188,20 @@ The operation was successful, but I had trouble formatting the response properly
       // Generic fallback for tool use errors
       const fallbackMessage = {
         role: "ai",
-        content: `✅ Operation completed successfully!
+        content: `⚠️ Operation Status Uncertain
 
-The transaction was processed successfully, but I had trouble formatting the response. You can check your transaction history or wallet balance to confirm the operation was completed.`,
+I encountered an issue while processing your request. The operation may or may not have been completed successfully. 
+
+**To verify:**
+• Check your transaction history
+• Verify your wallet balance
+• Look for any pending transactions
+
+**If the operation didn't complete:**
+• Try your request again
+• Contact support if the issue persists
+
+I apologize for the uncertainty - it's better to be honest about potential issues than to provide false confirmation.`,
       };
 
       return { messages: [fallbackMessage], userId };
