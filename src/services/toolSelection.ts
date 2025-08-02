@@ -218,15 +218,35 @@ class ToolSelectionService {
       ]
     },
     {
-      name: "get_dca_orders",
+      name: "get_user_dca_orders",
       description: "Get all DCA orders for the user",
-      parameters: [],
+      parameters: [
+        { name: "limit", type: "number", required: false, description: "Number of orders to return (default: 10)" },
+        { name: "status", type: "string", required: false, description: "Filter by status: 'active', 'completed', 'cancelled', 'expired'" }
+      ],
       examples: [
         "Show my DCA orders",
         "Get DCA orders",
         "List DCA orders",
         "My automated orders",
-        "DCA orders"
+        "DCA orders",
+        "Check my DCA orders",
+        "View my DCA orders"
+      ]
+    },
+    {
+      name: "get_dca_order_status",
+      description: "Get the status of a specific DCA order by order ID",
+      parameters: [
+        { name: "orderId", type: "string", required: true, description: "The ID of the DCA order to check" }
+      ],
+      examples: [
+        "Check DCA order status",
+        "Get order status",
+        "DCA order status",
+        "Order status",
+        "Check order",
+        "Get DCA order details"
       ]
     },
     {
@@ -343,6 +363,15 @@ class ToolSelectionService {
 
   async selectTool(userMessage: string, context?: any): Promise<ToolSelectionResult> {
     try {
+      console.log(`🔍 Tool Selection - Message: "${userMessage}"`);
+      
+      // Force fallback for DCA requests to ensure proper parameter parsing
+      const lowerMessage = userMessage.toLowerCase();
+      if (lowerMessage.includes('swap') && lowerMessage.includes('when') && lowerMessage.includes('reaches')) {
+        console.log("🎯 Detected DCA pattern, using fallback parser for reliable parameter extraction");
+        return this.fallbackToolSelection(userMessage);
+      }
+      
       const systemPrompt = this.buildSystemPrompt();
       const userPrompt = this.buildUserPrompt(userMessage, context);
 
@@ -358,8 +387,12 @@ class ToolSelectionService {
         throw new Error("No response from Groq");
       }
 
+      console.log(`🤖 Groq Response:`, content);
+
       // Parse the JSON response
       const parsedResponse = this.parseGroqResponse(content);
+      
+      console.log(`🎯 Parsed Response:`, parsedResponse);
       
       // Validate the selected tool exists
       const toolExists = this.tools.find(tool => tool.name === parsedResponse.selectedTool);
@@ -564,12 +597,19 @@ Important:
       };
     }
 
-    if (lowerMessage.includes('dca') || lowerMessage.includes('automated')) {
+    if (lowerMessage.includes('dca') || lowerMessage.includes('automated') || 
+        (lowerMessage.includes('swap') && lowerMessage.includes('when') && lowerMessage.includes('reaches'))) {
+      
+      // Parse DCA parameters from the message
+      const dcaParams = this.parseDCAParameters(userMessage);
+      
+      console.log(`🔧 DCA Parameters Extracted:`, dcaParams);
+      
       return {
         selectedTool: "create_dca_order",
-        confidence: 0.7,
-        parameters: {},
-        reasoning: "Fallback: Detected DCA/automated keywords"
+        confidence: 0.8,
+        parameters: dcaParams,
+        reasoning: "Fallback: Detected DCA/automated swap with trigger condition"
       };
     }
 
@@ -588,6 +628,47 @@ Important:
 
   getAllTools(): ToolDefinition[] {
     return this.tools;
+  }
+
+  private parseDCAParameters(userMessage: string): Record<string, any> {
+    const lowerMessage = userMessage.toLowerCase();
+    
+    // Extract amount
+    const amountMatch = lowerMessage.match(/(\d+(?:\.\d+)?)\s*(xfi|usdc)/i);
+    const amount = amountMatch ? amountMatch[1] : null;
+    const fromToken = amountMatch ? amountMatch[2].toUpperCase() : null;
+    
+    // Extract trigger price
+    const priceMatch = lowerMessage.match(/reaches\s*(\d+(?:\.\d+)?)/i);
+    const triggerPrice = priceMatch ? parseFloat(priceMatch[1]) : null;
+    
+    // Determine trigger condition based on context
+    let triggerCondition = "below"; // default
+    if (lowerMessage.includes("above") || lowerMessage.includes("goes up")) {
+      triggerCondition = "above";
+    } else if (lowerMessage.includes("below") || lowerMessage.includes("goes down") || lowerMessage.includes("drops")) {
+      triggerCondition = "below";
+    }
+    
+    // Determine toToken (opposite of fromToken)
+    const toToken = fromToken === "XFI" ? "USDC" : fromToken === "USDC" ? "XFI" : null;
+    
+    // Validate required parameters
+    if (!amount || !fromToken || !toToken || triggerPrice === null) {
+      console.log("⚠️ Could not parse DCA parameters from message:", userMessage);
+      return {};
+    }
+    
+    return {
+      orderType: "swap",
+      fromToken,
+      toToken,
+      amount,
+      triggerPrice,
+      triggerCondition,
+      slippage: 5,
+      expirationDays: 30
+    };
   }
 }
 

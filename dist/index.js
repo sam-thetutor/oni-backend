@@ -87,6 +87,12 @@ const callModel = async (state) => {
             "• ANY request containing 'swap', 'DCA', 'order', 'create' MUST use tools\n" +
             "• NEVER respond to these requests without calling tools first\n" +
             "• NEVER generate fake order IDs, transaction hashes, or success messages\n" +
+            "• AFTER successfully creating a DCA order, provide a clear summary and STOP calling additional tools\n" +
+            "• If a tool fails with 'User wallet not found', provide helpful guidance instead of retrying\n" +
+            "• When a DCA order is successfully created, present the order details clearly and do NOT try to check order status\n" +
+            "• If you see a successful DCA order creation response, provide a user-friendly summary and end the conversation\n" +
+            "• CRITICAL: After creating a DCA order successfully, you MUST provide a summary and STOP. Do NOT call any more tools.\n" +
+            "• CRITICAL: If the last tool result contains 'DCA order created successfully', provide a summary and END the conversation.\n" +
             "\nYou're an expert in both technical blockchain operations AND market analysis - help users understand the CrossFi ecosystem comprehensively using ONLY real data from the tools!",
     };
     try {
@@ -102,6 +108,33 @@ const callModel = async (state) => {
         const actionKeywords = ['swap', 'send', 'create', 'transfer', 'pay', 'order', 'dca', 'execute', 'trade'];
         const requestedAction = actionKeywords.some(keyword => userMessage.toLowerCase().includes(keyword));
         const isAlreadyToolResult = userMessage.includes('✅ **Tool Executed**') || userMessage.includes('"success":true');
+        const recentMessages = messages.slice(-5);
+        const dcaOrderCreated = recentMessages.some(msg => msg._getType() === "tool" &&
+            msg.content &&
+            String(msg.content).includes("DCA order created successfully"));
+        if (dcaOrderCreated) {
+            console.log("🎯 DCA order was created successfully - forcing summary response");
+            const summaryMessage = {
+                role: "ai",
+                content: `🎉 **DCA Order Created Successfully!**
+
+Your automated trading order has been set up and is now active. The order will automatically execute when the market conditions are met.
+
+**What happens next:**
+• Your order is now monitoring the market
+• It will execute automatically when the trigger price is reached
+• You can check your order status anytime
+• The order will expire if not executed within the specified time
+
+**Need help?**
+• Check your order status in the app
+• View your transaction history
+• Contact support if you have questions
+
+Your DCA order is ready to go! 🚀`
+            };
+            return { messages: [summaryMessage], userId };
+        }
         if (requestedAction && !isAlreadyToolResult && (!lastMessage.tool_calls || lastMessage.tool_calls.length === 0)) {
             console.log("🚨 Action requested but no tools called - forcing tool execution");
             const forcedToolCall = {
@@ -110,7 +143,10 @@ const callModel = async (state) => {
                 tool_calls: [{
                         id: `forced_tool_call_${Date.now()}`,
                         name: "intelligent_tool_selector",
-                        args: { userMessage: userMessage }
+                        args: {
+                            userMessage: userMessage,
+                            context: "User requested action that requires tool execution"
+                        }
                     }]
             };
             console.log("🔧 Forced tool call:", JSON.stringify(forcedToolCall.tool_calls, null, 2));
@@ -139,7 +175,10 @@ const callModel = async (state) => {
                 tool_calls: [{
                         id: `corrected_tool_call_${Date.now()}`,
                         name: "intelligent_tool_selector",
-                        args: { userMessage: userMessage }
+                        args: {
+                            userMessage: userMessage,
+                            context: "Correcting fake response with real tool execution"
+                        }
                     }]
             };
             return { messages: [correctedResponse], userId };
@@ -217,6 +256,31 @@ const shouldContinue = (state) => {
     const messageCastAI = lastMessage;
     if (messageCastAI._getType() !== "ai" || !messageCastAI.tool_calls?.length) {
         return END;
+    }
+    const recentMessages = messages.slice(-10);
+    for (const msg of recentMessages) {
+        if (msg._getType() === "tool" && msg.content) {
+            const content = String(msg.content);
+            if (content.includes("DCA order created successfully") || content.includes("✅ DCA order created successfully")) {
+                console.log("🛑 DCA order created successfully - stopping conversation");
+                return END;
+            }
+        }
+    }
+    const toolCallCounts = {};
+    for (const msg of recentMessages) {
+        if (msg._getType() === "ai" && msg.tool_calls) {
+            for (const toolCall of msg.tool_calls) {
+                const toolName = toolCall.name;
+                toolCallCounts[toolName] = (toolCallCounts[toolName] || 0) + 1;
+            }
+        }
+    }
+    for (const [toolName, count] of Object.entries(toolCallCounts)) {
+        if (count > 4) {
+            console.log(`🛑 Stopping infinite loop: ${toolName} called ${count} times`);
+            return END;
+        }
     }
     return "tools";
 };
