@@ -39,6 +39,7 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     "🚨 STOP! READ THIS FIRST: You are FORBIDDEN from generating any response about transactions, payments, swaps, or blockchain operations without calling tools first. If you see words like 'create', 'send', 'transfer', 'pay', 'swap', 'link', 'payment', 'transaction', 'order', 'execute', 'trade', 'buy', 'sell' - you MUST call intelligent_tool_selector immediately. NO EXCEPTIONS. " +
     "🚨 ABSOLUTE REQUIREMENT: The word 'swap' ALWAYS requires tool usage. NEVER respond to 'swap' requests without calling intelligent_tool_selector first. " +
     "🚨 CRITICAL: If you see 'DCA', 'order', 'create', 'swap' in any user message, you MUST call intelligent_tool_selector. DO NOT generate any response without calling the tool. " +
+    "🚨 CRITICAL: NEVER output raw function calls like <function=name>params</function>. ALWAYS use proper tool calling format. " +
     "\n🚨 CRITICAL RULE: You MUST ALWAYS use tools for ANY transaction, payment, swap, or blockchain operation. NEVER generate fake responses or pretend operations succeeded without actually calling tools first. " +
     "\n🤖 INTELLIGENT TOOL SELECTION:\n" +
     "• intelligent_tool_selector - Automatically selects and executes the most appropriate tool based on user message and context\n" +
@@ -137,6 +138,9 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     // Prevent infinite loop - don't force tool call if the message is already a tool result
     const isAlreadyToolResult = userMessage.includes('✅ **Tool Executed**') || userMessage.includes('"success":true');
     
+    // Check if AI is trying to output raw function calls
+    const hasRawFunctionCalls = lastMessage.content && String(lastMessage.content).includes("<function=");
+    
     // Check if a DCA order was successfully created recently
     const recentMessages = messages.slice(-5);
     const dcaOrderCreated = recentMessages.some(msg => 
@@ -167,6 +171,27 @@ Your automated trading order has been set up and is now active. The order will a
 Your DCA order is ready to go! 🚀`
       };
       return { messages: [summaryMessage], userId };
+    }
+    
+    // Handle raw function calls by forcing proper tool execution
+    if (hasRawFunctionCalls) {
+      console.log("🔧 Detected raw function calls in response, forcing proper tool execution");
+      const forcedToolCall = {
+        role: "ai",
+        content: "",
+        tool_calls: [{
+          id: `forced_tool_call_${Date.now()}`,
+          type: "function",
+          function: {
+            name: "intelligent_tool_selector",
+            arguments: JSON.stringify({
+              context: "User requested action that requires tool execution",
+              userMessage: userMessage
+            })
+          }
+        }]
+      };
+      return { messages: [forcedToolCall], userId };
     }
     
     if (requestedAction && !isAlreadyToolResult && (!lastMessage.tool_calls || lastMessage.tool_calls.length === 0)) {
@@ -279,6 +304,38 @@ I'll be back to help you with more complex tasks soon! 🚀`,
         const toolResult = toolResultMatch[1]
           .replace(/\\n/g, "\n")
           .replace(/\\"/g, '"');
+
+        // Check if this contains raw function calls that need to be executed
+        if (toolResult.includes("<function=")) {
+          console.log("🔧 Detected raw function calls, attempting to parse and execute");
+          
+          // Try to extract and execute the intelligent_tool_selector call
+          const intelligentToolMatch = toolResult.match(/<function=intelligent_tool_selector>([^<]+)<\/function>/);
+          if (intelligentToolMatch) {
+            try {
+              const params = JSON.parse(intelligentToolMatch[1]);
+              console.log("🔄 Executing intelligent_tool_selector with params:", params);
+              
+              // Force a proper tool call
+              const forcedToolCall = {
+                role: "ai",
+                content: "",
+                tool_calls: [{
+                  id: `forced_tool_call_${Date.now()}`,
+                  type: "function",
+                  function: {
+                    name: "intelligent_tool_selector",
+                    arguments: JSON.stringify(params)
+                  }
+                }]
+              };
+              
+              return { messages: [forcedToolCall], userId };
+            } catch (parseError) {
+              console.error("Failed to parse intelligent_tool_selector params:", parseError);
+            }
+          }
+        }
 
         // Return the tool result as a simple message
         const fallbackMessage = {
