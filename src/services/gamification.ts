@@ -30,15 +30,42 @@ export interface TransactionReward {
   reason: string;
 }
 
+export interface ActivityReward {
+  basePoints: number;
+  bonusPoints: number;
+  totalPoints: number;
+  reason: string;
+}
+
 export class GamificationService {
   // Points configuration
   private static readonly POINTS_CONFIG = {
+    // Transaction rewards
     TRANSACTION_SUCCESS: 50,       // Base points for successful transaction
     FIRST_TRANSACTION: 200,        // Bonus for first transaction
     VOLUME_MULTIPLIER: 10,         // Points per XFI in transaction
     LARGE_VOLUME_BONUS: 100,       // Bonus for transactions > 5 XFI
     HIGH_VOLUME_BONUS: 250,        // Bonus for transactions > 10 XFI
     VOLUME_MILESTONE_BONUS: 500,   // Bonus for reaching volume milestones
+    
+    // Swap rewards
+    SWAP_SUCCESS: 30,              // Base points for successful swap
+    FIRST_SWAP: 150,               // Bonus for first swap
+    SWAP_VOLUME_MULTIPLIER: 8,     // Points per XFI in swap
+    SWAP_LARGE_VOLUME_BONUS: 80,   // Bonus for swaps > 5 XFI
+    SWAP_HIGH_VOLUME_BONUS: 200,   // Bonus for swaps > 10 XFI
+    
+    // Payment link rewards
+    PAYMENT_LINK_CREATED: 25,      // Base points for creating payment link
+    FIRST_PAYMENT_LINK: 100,       // Bonus for first payment link
+    GLOBAL_PAYMENT_LINK_BONUS: 50, // Bonus for global payment links
+    FIXED_PAYMENT_LINK_BONUS: 30,  // Bonus for fixed payment links
+    
+    // DCA order rewards
+    DCA_ORDER_CREATED: 40,         // Base points for creating DCA order
+    FIRST_DCA_ORDER: 120,          // Bonus for first DCA order
+    DCA_ORDER_VOLUME_MULTIPLIER: 6, // Points per XFI in DCA order
+    DCA_ORDER_EXECUTED: 60,        // Bonus when DCA order executes
   };
 
   /**
@@ -97,6 +124,113 @@ export class GamificationService {
   }
 
   /**
+   * Calculate reward points for a swap based on volume
+   */
+  static calculateSwapReward(user: IUser, amount: string, isFirstSwap: boolean = false): ActivityReward {
+    let basePoints = this.POINTS_CONFIG.SWAP_SUCCESS;
+    let bonusPoints = 0;
+    const reasons: string[] = [];
+
+    const amountNum = parseFloat(amount);
+    
+    // Volume-based points (points per XFI)
+    const volumePoints = Math.floor(amountNum * this.POINTS_CONFIG.SWAP_VOLUME_MULTIPLIER);
+    basePoints += volumePoints;
+    reasons.push(`${volumePoints} points for ${amountNum} XFI swap volume`);
+
+    // First swap bonus
+    if (isFirstSwap) {
+      bonusPoints += this.POINTS_CONFIG.FIRST_SWAP;
+      reasons.push('First swap bonus');
+    }
+
+    // Large volume bonus (swaps > 5 XFI)
+    if (amountNum >= 5.0) {
+      bonusPoints += this.POINTS_CONFIG.SWAP_LARGE_VOLUME_BONUS;
+      reasons.push('Large swap volume bonus (5+ XFI)');
+    }
+
+    // High volume bonus (swaps > 10 XFI)
+    if (amountNum >= 10.0) {
+      bonusPoints += this.POINTS_CONFIG.SWAP_HIGH_VOLUME_BONUS;
+      reasons.push('High swap volume bonus (10+ XFI)');
+    }
+
+    const totalPoints = basePoints + bonusPoints;
+
+    return {
+      basePoints,
+      bonusPoints,
+      totalPoints,
+      reason: reasons.join(', ') || 'Standard swap reward'
+    };
+  }
+
+  /**
+   * Calculate reward points for payment link creation
+   */
+  static calculatePaymentLinkReward(user: IUser, isGlobal: boolean, isFirstPaymentLink: boolean = false): ActivityReward {
+    let basePoints = this.POINTS_CONFIG.PAYMENT_LINK_CREATED;
+    let bonusPoints = 0;
+    const reasons: string[] = [];
+
+    // First payment link bonus
+    if (isFirstPaymentLink) {
+      bonusPoints += this.POINTS_CONFIG.FIRST_PAYMENT_LINK;
+      reasons.push('First payment link bonus');
+    }
+
+    // Type-specific bonus
+    if (isGlobal) {
+      bonusPoints += this.POINTS_CONFIG.GLOBAL_PAYMENT_LINK_BONUS;
+      reasons.push('Global payment link bonus');
+    } else {
+      bonusPoints += this.POINTS_CONFIG.FIXED_PAYMENT_LINK_BONUS;
+      reasons.push('Fixed payment link bonus');
+    }
+
+    const totalPoints = basePoints + bonusPoints;
+
+    return {
+      basePoints,
+      bonusPoints,
+      totalPoints,
+      reason: reasons.join(', ') || 'Payment link creation reward'
+    };
+  }
+
+  /**
+   * Calculate reward points for DCA order creation
+   */
+  static calculateDCAOrderReward(user: IUser, amount: string, isFirstDCAOrder: boolean = false): ActivityReward {
+    let basePoints = this.POINTS_CONFIG.DCA_ORDER_CREATED;
+    let bonusPoints = 0;
+    const reasons: string[] = [];
+
+    const amountNum = parseFloat(amount);
+    
+    // Volume-based points (points per XFI)
+    const volumePoints = Math.floor(amountNum * this.POINTS_CONFIG.DCA_ORDER_VOLUME_MULTIPLIER);
+    basePoints += volumePoints;
+    reasons.push(`${volumePoints} points for ${amountNum} XFI DCA order volume`);
+
+    // First DCA order bonus
+    if (isFirstDCAOrder) {
+      bonusPoints += this.POINTS_CONFIG.FIRST_DCA_ORDER;
+      reasons.push('First DCA order bonus');
+    }
+
+    const totalPoints = basePoints + bonusPoints;
+
+    return {
+      basePoints,
+      bonusPoints,
+      totalPoints,
+      reason: reasons.join(', ') || 'DCA order creation reward'
+    };
+  }
+
+  /**
    * Award points to user for successful transaction
    */
   static async awardTransactionPoints(user: IUser, amount: string): Promise<TransactionReward> {
@@ -118,6 +252,97 @@ export class GamificationService {
     } catch (error) {
       console.error('Error awarding transaction points:', error);
       throw new Error('Failed to award points');
+    }
+  }
+
+  /**
+   * Award points to user for successful swap
+   */
+  static async awardSwapPoints(user: IUser, amount: string): Promise<ActivityReward> {
+    try {
+      // Check if this is the first swap (you might want to track this separately)
+      const isFirstSwap = user.totalVolume === 0; // Using totalVolume as a proxy for now
+      const reward = this.calculateSwapReward(user, amount, isFirstSwap);
+      
+      // Add points to user
+      await user.addPoints(reward.totalPoints);
+      
+      // Add weekly points
+      await user.addWeeklyPoints(reward.totalPoints);
+      
+      return reward;
+    } catch (error) {
+      console.error('Error awarding swap points:', error);
+      throw new Error('Failed to award swap points');
+    }
+  }
+
+  /**
+   * Award points to user for payment link creation
+   */
+  static async awardPaymentLinkPoints(user: IUser, isGlobal: boolean): Promise<ActivityReward> {
+    try {
+      // Check if this is the first payment link (you might want to track this separately)
+      const isFirstPaymentLink = user.points < 100; // Simple heuristic for now
+      const reward = this.calculatePaymentLinkReward(user, isGlobal, isFirstPaymentLink);
+      
+      // Add points to user
+      await user.addPoints(reward.totalPoints);
+      
+      // Add weekly points
+      await user.addWeeklyPoints(reward.totalPoints);
+      
+      return reward;
+    } catch (error) {
+      console.error('Error awarding payment link points:', error);
+      throw new Error('Failed to award payment link points');
+    }
+  }
+
+  /**
+   * Award points to user for DCA order creation
+   */
+  static async awardDCAOrderPoints(user: IUser, amount: string): Promise<ActivityReward> {
+    try {
+      // Check if this is the first DCA order (you might want to track this separately)
+      const isFirstDCAOrder = user.points < 200; // Simple heuristic for now
+      const reward = this.calculateDCAOrderReward(user, amount, isFirstDCAOrder);
+      
+      // Add points to user
+      await user.addPoints(reward.totalPoints);
+      
+      // Add weekly points
+      await user.addWeeklyPoints(reward.totalPoints);
+      
+      return reward;
+    } catch (error) {
+      console.error('Error awarding DCA order points:', error);
+      throw new Error('Failed to award DCA order points');
+    }
+  }
+
+  /**
+   * Award points to user for DCA order execution
+   */
+  static async awardDCAOrderExecutionPoints(user: IUser): Promise<ActivityReward> {
+    try {
+      const reward: ActivityReward = {
+        basePoints: this.POINTS_CONFIG.DCA_ORDER_EXECUTED,
+        bonusPoints: 0,
+        totalPoints: this.POINTS_CONFIG.DCA_ORDER_EXECUTED,
+        reason: 'DCA order executed successfully'
+      };
+      
+      // Add points to user
+      await user.addPoints(reward.totalPoints);
+      
+      // Add weekly points
+      await user.addWeeklyPoints(reward.totalPoints);
+      
+      return reward;
+    } catch (error) {
+      console.error('Error awarding DCA execution points:', error);
+      throw new Error('Failed to award DCA execution points');
     }
   }
 

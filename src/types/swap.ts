@@ -48,6 +48,12 @@ export interface SwapResult {
   finalToken?: string;
   error?: string;
   errorCode?: string;
+  reward?: {
+    basePoints: number;
+    bonusPoints: number;
+    totalPoints: number;
+    reason: string;
+  };
 }
 
 // Swap validation interface

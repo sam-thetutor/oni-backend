@@ -10,6 +10,18 @@ export class PaymentLinkService {
             createdAt: new Date(),
             updatedAt: new Date()
         });
+        try {
+            const { GamificationService } = await import('./gamification.js');
+            const { User } = await import('../models/User.js');
+            const user = await User.findOne({ walletAddress: userId });
+            if (user) {
+                const reward = await GamificationService.awardPaymentLinkPoints(user, false);
+                console.log(`🎯 Payment link points awarded: ${reward.totalPoints} points (${reward.reason})`);
+            }
+        }
+        catch (error) {
+            console.error('❌ Failed to award payment link points:', error);
+        }
         return paymentLink;
     }
     static async createPaymentLinkOnChain(privateKey, linkID, amount) {
@@ -65,6 +77,18 @@ export class PaymentLinkService {
             createdAt: new Date(),
             updatedAt: new Date()
         });
+        try {
+            const { GamificationService } = await import('./gamification.js');
+            const { User } = await import('../models/User.js');
+            const user = await User.findOne({ walletAddress: userId });
+            if (user) {
+                const reward = await GamificationService.awardPaymentLinkPoints(user, true);
+                console.log(`🎯 Global payment link points awarded: ${reward.totalPoints} points (${reward.reason})`);
+            }
+        }
+        catch (error) {
+            console.error('❌ Failed to award global payment link points:', error);
+        }
         return paymentLink;
     }
     static async contributeToGlobalPaymentLinkOnChain(privateKey, linkID, amount) {

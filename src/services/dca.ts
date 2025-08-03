@@ -97,6 +97,20 @@ export class DCAService {
 
       await dcaOrder.save();
 
+      // Award points for DCA order creation
+      try {
+        const { GamificationService } = await import('./gamification.js');
+        const { User } = await import('../models/User.js');
+        
+        const user = await User.findOne({ walletAddress: params.userId });
+        if (user) {
+          const reward = await GamificationService.awardDCAOrderPoints(user, params.fromAmount);
+          console.log(`🎯 DCA order points awarded: ${reward.totalPoints} points (${reward.reason})`);
+        }
+      } catch (error) {
+        console.error('❌ Failed to award DCA order points:', error);
+        // Don't fail the DCA order creation if points awarding fails
+      }
       
       return dcaOrder;
     } catch (error) {
@@ -191,9 +205,14 @@ export class DCAService {
 
   /**
    * Execute a DCA order
-   * Note: Swap functionality has been removed - this is a placeholder
    */
-  static async executeDCAOrder(order: IDCAOrder): Promise<{ success: boolean; error?: string }> {
+  static async executeDCAOrder(order: IDCAOrder): Promise<{ 
+    success: boolean; 
+    error?: string;
+    transactionHash?: string;
+    executedAmount?: string;
+    executedPrice?: number;
+  }> {
     try {
       console.log(`Executing DCA order ${order._id}`);
 
@@ -210,20 +229,89 @@ export class DCAService {
         throw new Error('Order no longer meets execution criteria');
       }
 
-      // TODO: Implement new swap functionality
-      console.log(`DCA order ${order._id} ready for execution - swap functionality needs to be implemented`);
+      // Execute the actual swap using SwapService
+      console.log(`🔄 Executing DCA order swap: ${order.fromAmount} ${order.fromToken} → ${order.toToken}`);
       
-      // For now, mark as failed since swap service is not available
-      order.status = 'failed';
-      order.failureReason = 'Swap functionality temporarily unavailable';
-      order.retryCount += 1;
-      
-      await order.save();
-      
-      return {
-        success: false,
-        error: 'Swap functionality temporarily unavailable',
-      };
+      try {
+        const { SwapService } = await import('./swap.js');
+        const { TokenService } = await import('./tokens.js');
+        const { TOKEN_METADATA } = await import('../constants/tokens.js');
+        
+        // Convert fromAmount from wei to human-readable format for swap
+        const fromTokenMeta = TOKEN_METADATA[order.fromToken as keyof typeof TOKEN_METADATA];
+        if (!fromTokenMeta) {
+          throw new Error(`Invalid from token: ${order.fromToken}`);
+        }
+        
+        const fromAmountFormatted = TokenService.formatTokenAmount(order.fromAmount, fromTokenMeta.decimals);
+        console.log(`💰 DCA swap amount: ${fromAmountFormatted} ${order.fromToken}`);
+        
+        // Prepare swap parameters
+        const swapParams = {
+          fromToken: order.fromToken,
+          toToken: order.toToken,
+          fromAmount: fromAmountFormatted,
+          slippage: order.maxSlippage,
+          recipient: order.walletAddress as any, // Use user's wallet as recipient
+        };
+        
+        console.log(`🚀 Executing DCA swap with params:`, swapParams);
+        
+        // Execute the swap
+        const swapResult = await SwapService.executeSwap(user, swapParams);
+        
+        if (swapResult.success) {
+          console.log(`✅ DCA order executed successfully!`);
+          console.log(`   Transaction hash: ${swapResult.transactionHash}`);
+          console.log(`   From: ${swapResult.fromAmount} ${swapResult.fromToken}`);
+          console.log(`   To: ${swapResult.toAmount} ${swapResult.toToken}`);
+          
+          // Update order with execution details
+          order.status = 'executed';
+          order.executedAt = new Date();
+          order.executedPrice = currentPrice;
+          order.executedAmount = swapResult.toAmount || '0';
+          order.transactionHash = swapResult.transactionHash;
+          
+          await order.save();
+          
+          // Award points for successful DCA execution
+          try {
+            const { GamificationService } = await import('./gamification.js');
+            const reward = await GamificationService.awardDCAOrderExecutionPoints(user);
+            console.log(`🎯 DCA execution points awarded: ${reward.totalPoints} points (${reward.reason})`);
+          } catch (error) {
+            console.error('❌ Failed to award DCA execution points:', error);
+          }
+          
+          return {
+            success: true,
+            transactionHash: swapResult.transactionHash,
+            executedAmount: swapResult.toAmount,
+            executedPrice: currentPrice,
+          };
+        } else {
+          console.log(`❌ DCA swap failed: ${swapResult.error}`);
+          throw new Error(`Swap execution failed: ${swapResult.error}`);
+        }
+      } catch (swapError: any) {
+        console.error(`❌ DCA swap execution error:`, swapError);
+        
+        // Update order with failure details
+        order.retryCount += 1;
+        order.failureReason = `Swap execution failed: ${swapError.message}`;
+        
+        if (order.retryCount >= order.maxRetries) {
+          order.status = 'failed';
+        }
+        
+        await order.save();
+        
+        return {
+          success: false,
+          error: `Swap execution failed: ${swapError.message}`,
+        };
+      }
     } catch (error: any) {
       console.error(`Error executing DCA order ${order._id}:`, error);
       

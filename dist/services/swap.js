@@ -376,6 +376,20 @@ export class SwapService {
                     swapResult.wrapGasUsed = wrapGasUsed;
                     swapResult.wrapGasPrice = wrapGasPrice;
                 }
+                try {
+                    const { GamificationService } = await import('./gamification.js');
+                    const reward = await GamificationService.awardSwapPoints(user, params.fromAmount);
+                    console.log(`🎯 Swap points awarded: ${reward.totalPoints} points (${reward.reason})`);
+                    swapResult.reward = {
+                        basePoints: reward.basePoints,
+                        bonusPoints: reward.bonusPoints,
+                        totalPoints: reward.totalPoints,
+                        reason: reward.reason
+                    };
+                }
+                catch (error) {
+                    console.error('❌ Failed to award swap points:', error);
+                }
             }
             else {
                 console.log(`   Error: ${swapResult.error}`);
