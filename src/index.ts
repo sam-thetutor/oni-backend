@@ -40,6 +40,7 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     "🚨 CRITICAL: NEVER generate fake responses in content - ALWAYS use tools for real operations.\n" +
     "🚨 CRITICAL: If you need to create, swap, or perform any action - use the appropriate tool.\n" +
     "🚨 CRITICAL: For payment links - if no amount specified, use create_global_payment_link with empty args {}. If amount specified, use create_payment_links with amount like '10 XFI'.\n" +
+    "🚨 CRITICAL: NEVER output <function=send_token> or similar in content - use tool_calls instead.\n" +
     "\n🔧 KEY TOOLS:\n" +
     "• get_balance - Get wallet balance\n" +
     "• execute_swap - Execute token swaps (USDC↔XFI, etc.)\n" +

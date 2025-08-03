@@ -181,15 +181,23 @@ class GetBalanceTool extends StructuredTool {
 }
 class SendTransactionTool extends StructuredTool {
     name = "send_transaction";
-    description = "Sends a transaction from the user's wallet to another address";
+    description = "Sends a transaction from the user's wallet to another address. Use this when user says 'send XFI', 'transfer XFI', 'send 10 XFI to address', etc.";
     schema = z.object({
         to: z.string().describe("The recipient wallet address"),
-        amount: z.string().describe("The amount to send in XFI (e.g., '0.1')"),
+        amount: z.string().describe("The amount to send (e.g., '1 XFI', '0.5 XFI', '10 XFI'). Must include the token name 'XFI'."),
         data: z.string().optional().describe("Optional transaction data (hex string)")
     });
     async _call(input, runManager) {
         try {
             const { to, amount, data } = input;
+            const numericAmount = amount.replace(/\s*XFI\s*$/i, '').trim();
+            const parsedAmount = parseFloat(numericAmount);
+            if (isNaN(parsedAmount) || parsedAmount <= 0) {
+                return JSON.stringify({
+                    success: false,
+                    error: `Invalid amount: ${amount}. Please provide a valid positive number.`
+                });
+            }
             const frontendWalletAddress = currentUserFrontendWalletAddress;
             if (!frontendWalletAddress) {
                 return JSON.stringify({
@@ -217,7 +225,7 @@ class SendTransactionTool extends StructuredTool {
                     error: 'User not found in database'
                 });
             }
-            const transaction = await BlockchainService.sendTransaction(userModel, to, amount, data);
+            const transaction = await BlockchainService.sendTransaction(userModel, to, parsedAmount.toString(), data);
             const response = {
                 success: true,
                 transactionHash: transaction.hash,

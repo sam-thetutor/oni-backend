@@ -246,16 +246,27 @@ class GetBalanceTool extends StructuredTool {
 // Send Transaction Tool
 class SendTransactionTool extends StructuredTool {
   name = "send_transaction";
-  description = "Sends a transaction from the user's wallet to another address";
+  description = "Sends a transaction from the user's wallet to another address. Use this when user says 'send XFI', 'transfer XFI', 'send 10 XFI to address', etc.";
   schema = z.object({
     to: z.string().describe("The recipient wallet address"),
-    amount: z.string().describe("The amount to send in XFI (e.g., '0.1')"),
+    amount: z.string().describe("The amount to send (e.g., '1 XFI', '0.5 XFI', '10 XFI'). Must include the token name 'XFI'."),
     data: z.string().optional().describe("Optional transaction data (hex string)")
   });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
     try {
       const { to, amount, data } = input;
+      
+      // Extract numeric amount from the input (e.g., "1 XFI" -> "1")
+      const numericAmount = amount.replace(/\s*XFI\s*$/i, '').trim();
+      const parsedAmount = parseFloat(numericAmount);
+      
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return JSON.stringify({ 
+          success: false, 
+          error: `Invalid amount: ${amount}. Please provide a valid positive number.` 
+        });
+      }
       // Get frontend wallet address from global variable
       const frontendWalletAddress = currentUserFrontendWalletAddress;
       if (!frontendWalletAddress) {
@@ -288,7 +299,7 @@ class SendTransactionTool extends StructuredTool {
           error: 'User not found in database' 
         });
       }
-      const transaction = await BlockchainService.sendTransaction(userModel, to, amount, data);
+      const transaction = await BlockchainService.sendTransaction(userModel, to, parsedAmount.toString(), data);
       
       // Build response object
       const response: any = {
