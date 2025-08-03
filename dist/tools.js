@@ -974,6 +974,58 @@ class ContributeToGlobalPaymentLinkTool extends StructuredTool {
         }
     }
 }
+class DeletePaymentLinkTool extends StructuredTool {
+    name = "delete_payment_link";
+    description = "Permanently deletes a payment link by link ID. Use this when user says 'delete payment link', 'remove payment link', or 'delete link ID'. This will completely remove the payment link from the system and it will no longer appear in the list.";
+    schema = z.object({
+        linkId: z.string().describe("The ID of the payment link to delete")
+    });
+    async _call(input, runManager) {
+        try {
+            const { linkId } = input;
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User not authenticated. Please try again.'
+                });
+            }
+            const user = await MongoDBService.getWalletByFrontendAddress(frontendWalletAddress);
+            if (!user) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'User wallet not found in database'
+                });
+            }
+            const paymentLink = await PaymentLink.findOneAndDelete({
+                linkId: linkId,
+                userId: user.walletAddress
+            });
+            if (!paymentLink) {
+                return JSON.stringify({
+                    success: false,
+                    error: 'Payment link not found or you do not have permission to delete it'
+                });
+            }
+            return JSON.stringify({
+                success: true,
+                message: `✅ Payment link ${linkId} has been completely removed from the system.`,
+                data: {
+                    linkId: paymentLink.linkId,
+                    type: paymentLink.amount === 0 ? 'global' : 'fixed',
+                    deleted: true
+                }
+            });
+        }
+        catch (error) {
+            console.error('Error deleting payment link:', error);
+            return JSON.stringify({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+}
 class CheckPaymentLinkStatusTool extends StructuredTool {
     name = "check_payment_link_status";
     description = "Checks the status of a payment link directly from the smart contract. Defaults to checking fixed payment links first, then tries global if not found.";
@@ -1671,6 +1723,7 @@ export const ALL_TOOLS_LIST = [
     new CreatePaymentLinksTool(),
     new PayFixedPaymentLinkTool(),
     new ContributeToGlobalPaymentLinkTool(),
+    new DeletePaymentLinkTool(),
     new CheckPaymentLinkStatusTool(),
     ...CRYPTO_ASSISTANT_TOOLS,
     XFIPriceChartTool,

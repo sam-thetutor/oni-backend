@@ -23,6 +23,7 @@ const callModel = async (state) => {
             "🚨 CRITICAL: If you need to create, swap, or perform any action - use the appropriate tool.\n" +
             "🚨 CRITICAL: For payment links - if no amount specified, use create_global_payment_link with empty args {}. If amount specified, use create_payment_links with amount like '10 XFI'.\n" +
             "🚨 CRITICAL: NEVER output <function=send_token> or similar in content - use tool_calls instead.\n" +
+            "🚨 CRITICAL: NEVER output <function=delete_payment_link> or similar in content - use tool_calls instead.\n" +
             "\n🔧 KEY TOOLS:\n" +
             "• get_balance - Get wallet balance\n" +
             "• execute_swap - Execute token swaps (USDC↔XFI, etc.)\n" +
@@ -31,6 +32,7 @@ const callModel = async (state) => {
             "• If the user does not specify the amount when creating a payment link - create a global payment link by default\n" +
             "• create_global_payment_link - DEFAULT: Create global payment link for donations (use when no amount specified)\n" +
             "• create_payment_links - Create fixed payment link with specific amount (use only when amount is specified)\n" +
+            "• delete_payment_link - Permanently delete payment link by ID (use when user says 'delete payment link' or 'remove payment link')\n" +
             "• get_user_stats - Get gamification stats\n" +
             "• get_crossfi_network_stats - Get network data\n" +
             "• delete_dca_order - Permanently delete DCA order by ID (use when user says 'delete DCA order' or 'remove DCA order')\n" +
@@ -44,6 +46,7 @@ const callModel = async (state) => {
             "• If user asks for 'global payment link' or 'donations' → call ONLY create_global_payment_link with empty args {}, then STOP\n" +
             "• If user asks for 'fixed payment link' with specific amount → call ONLY create_payment_links with amount like '10 XFI', then STOP\n" +
             "• If user asks for 'payment link for X XFI' → call ONLY create_payment_links with amount like 'X XFI', then STOP\n" +
+            "• If user asks for 'delete payment link' or 'remove payment link' → call ONLY delete_payment_link with linkId, then STOP\n" +
             "• NEVER generate fake payment link IDs - use the actual tool to create real links\n" +
             "• NEVER say 'payment link created' without calling the tool first\n" +
             "• NEVER put function calls in content - use tool_calls mechanism\n" +
