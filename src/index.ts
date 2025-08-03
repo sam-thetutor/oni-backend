@@ -54,7 +54,7 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     "• Execute ONLY the requested task - do NOT call additional tools\n" +
     "• If user says 'swap' → call ONLY execute_swap, then STOP\n" +
     "• If user asks for 'quote' → call ONLY get_swap_quote, then STOP\n" +
-    "• If user asks for 'balance' → call ONLY get_balance, then STOP\n" +
+    "• If user asks for 'balance' → call ONLY get_balance with empty args {}, then STOP\n" +
     "• If user asks for 'network stats' → call ONLY get_crossfi_network_stats, then STOP\n" +
     "• If user asks for 'payment link' without amount → call ONLY create_global_payment_link with empty args {}, then STOP\n" +
     "• If user asks for 'global payment link' or 'donations' → call ONLY create_global_payment_link with empty args {}, then STOP\n" +
@@ -89,6 +89,19 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
       console.log("🔧 Tool calls detected:", JSON.stringify(lastMessage.tool_calls, null, 2));
     } else {
       console.log("❌ No tool calls in response");
+    }
+    
+    // If this is a response after tool execution (no tool calls), ensure it has content
+    if (lastMessage && 'tool_calls' in lastMessage && (!lastMessage.tool_calls || lastMessage.tool_calls.length === 0)) {
+      // Check if the message has content, if not, add a fallback
+      if (!lastMessage.content || lastMessage.content.trim() === '') {
+        console.log("⚠️ Empty AI response after tool execution - adding fallback");
+        const fallbackMessage = {
+          ...lastMessage,
+          content: "Here's the information you requested. If you need more details, please ask a specific question."
+        };
+        return { messages: [fallbackMessage], userId };
+      }
     }
     
     return { messages: [lastMessage], userId };
@@ -168,10 +181,12 @@ const shouldContinue = (state: typeof GraphAnnotation.State) => {
     }
   }
 
-  // NEW: Stop after any tool execution (single-task mode)
+  // MODIFIED: Allow one more AI response after tool execution to format the result
   const recentToolMessages = recentMessages.filter(msg => msg._getType() === "tool");
-  if (recentToolMessages.length > 0) {
-    console.log("🛑 Tool executed - stopping conversation (single-task mode)");
+  const recentAIMessages = recentMessages.filter(msg => msg._getType() === "ai");
+  
+  if (recentToolMessages.length > 0 && recentAIMessages.length > 0) {
+    console.log("🛑 Tool executed and AI responded - stopping conversation (single-task mode)");
     return END;
   }
 

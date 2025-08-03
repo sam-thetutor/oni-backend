@@ -57,7 +57,7 @@ export const getCurrentUserFrontendWalletAddress = (): string | null => {
 // Wallet Info Tool
 class GetWalletInfoTool extends StructuredTool {
   name = "get_wallet_info";
-  description = "Gets information about the user's wallet";
+  description = "Gets information about the user's wallet. NO PARAMETERS NEEDED - just call this tool with empty arguments {}.";
   schema = z.object({});
 
   async _call(input: z.infer<typeof this.schema>, runManager?: any) {
@@ -100,7 +100,7 @@ class GetWalletInfoTool extends StructuredTool {
 // Get Wallet for Operations Tool
 class GetWalletForOperationsTool extends StructuredTool {
   name = "get_wallet_for_operations";
-  description = "Gets the user's wallet information for blockchain operations (includes private key)";
+  description = "Gets the user's wallet information for blockchain operations (includes private key). NO PARAMETERS NEEDED - just call this tool with empty arguments {}.";
   schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
@@ -155,7 +155,7 @@ class GetWalletForOperationsTool extends StructuredTool {
 // Get Balance Tool
 class GetBalanceTool extends StructuredTool {
   name = "get_balance";
-  description = "Gets the balance of the user's wallet including XFI and USDC tokens";
+  description = "Gets the balance of the user's wallet including XFI and USDC tokens. NO PARAMETERS NEEDED - just call this tool with empty arguments {}.";
   schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
@@ -604,7 +604,7 @@ class GetTransactionHistoryTool extends StructuredTool {
 // Get User Stats Tool
 class GetUserStatsTool extends StructuredTool {
   name = "get_user_stats";
-  description = "Gets the current user's gamification stats (points, rank, achievements)";
+  description = "Gets the current user's gamification stats (points, rank, achievements). NO PARAMETERS NEEDED - just call this tool with empty arguments {}.";
   schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
@@ -1582,7 +1582,7 @@ class GetSwapQuoteTool extends StructuredTool {
 // Get DCA System Status Tool
 class GetDCASystemStatusTool extends StructuredTool {
   name = "get_dca_system_status";
-  description = "Gets the current status of the DCA monitoring and execution system";
+  description = "Gets the current status of the DCA monitoring and execution system. NO PARAMETERS NEEDED - just call this tool with empty arguments {}.";
   schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
@@ -1602,7 +1602,7 @@ class GetDCASystemStatusTool extends StructuredTool {
 // Get User Token Balances Tool
 class GetUserTokenBalancesTool extends StructuredTool {
   name = "get_user_token_balances";
-  description = "Gets the user's current balances for DCA-supported tokens (XFI, USDC). Note: USDT is temporarily disabled due to incorrect pricing.";
+  description = "Gets the user's current balances for DCA-supported tokens (XFI, USDC). Note: USDT is temporarily disabled due to incorrect pricing. NO PARAMETERS NEEDED - just call this tool with empty arguments {}.";
   schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
@@ -1984,7 +1984,7 @@ class ExecuteSwapTool extends StructuredTool {
 // Get Supported Swap Tokens Tool
 class GetSupportedSwapTokensTool extends StructuredTool {
   name = "get_supported_swap_tokens";
-  description = "Gets the list of supported tokens for swapping. PRIMARY PAIRS: USDC↔XFI (recommended for stablecoin swaps). Note: USDT is temporarily disabled due to incorrect pricing.";
+  description = "Gets the list of supported tokens for swapping. PRIMARY PAIRS: USDC↔XFI (recommended for stablecoin swaps). Note: USDT is temporarily disabled due to incorrect pricing. NO PARAMETERS NEEDED - just call this tool with empty arguments {}.";
   schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
