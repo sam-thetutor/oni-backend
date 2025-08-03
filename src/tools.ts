@@ -35,6 +35,7 @@ import {
   createDCAOrder,
   getUserDCAOrders,
   cancelDCAOrder,
+  deleteDCAOrder,
   getDCAOrderStatus,
   getSwapQuote,
   getDCASystemStatus,
@@ -1499,6 +1500,44 @@ class CancelDCAOrderTool extends StructuredTool {
   }
 }
 
+// Delete DCA Order Tool
+class DeleteDCAOrderTool extends StructuredTool {
+  name = "delete_dca_order";
+  description = "Permanently deletes a DCA order by order ID. Use this when user says 'delete DCA order', 'remove DCA order', or 'delete order ID'. This will completely remove the order from the system.";
+  schema = z.object({
+    orderId: z.string().describe("The ID of the DCA order to delete permanently")
+  });
+
+  protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
+    try {
+      const frontendWalletAddress = currentUserFrontendWalletAddress;
+      if (!frontendWalletAddress) {
+        return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
+      }
+      const { orderId } = input;
+      if (!orderId) {
+        return JSON.stringify({ success: false, error: 'Missing required orderId.' });
+      }
+      
+      // First cancel the order if it's active
+      try {
+        const cancelParams = { userId: frontendWalletAddress, orderId };
+        await cancelDCAOrder(cancelParams);
+      } catch (cancelError) {
+        // If cancel fails, continue with deletion anyway
+        console.log(`Order ${orderId} could not be cancelled before deletion:`, cancelError);
+      }
+      
+      // Delete the order from database
+      const result = await deleteDCAOrder({ userId: frontendWalletAddress, orderId });
+      return JSON.stringify(result);
+    } catch (error: any) {
+      console.error('Error in delete_dca_order:', error);
+      return JSON.stringify({ success: false, error: error.message });
+    }
+  }
+}
+
 // Get DCA Order Status Tool
 class GetDCAOrderStatusTool extends StructuredTool {
   name = "get_dca_order_status";
@@ -2075,6 +2114,7 @@ export const ALL_TOOLS_LIST = [
   new CreateDCAOrderTool(),
   new GetUserDCAOrdersTool(),
   new CancelDCAOrderTool(),
+  new DeleteDCAOrderTool(),
   new GetDCAOrderStatusTool(),
   new GetSwapQuoteTool(),
   new GetDCASystemStatusTool(),

@@ -18,7 +18,7 @@ import dotenv from 'dotenv';
 import { AnalyticsService } from "./services/analytics.js";
 dotenv.config();
 import { XFIPriceChartTool, XFIMarketDataTool, XFITradingSignalsTool, XFIPricePredictionTool, XFIMarketComparisonTool } from './tools/price-analysis.js';
-import { createDCAOrder, getUserDCAOrders, cancelDCAOrder, getDCAOrderStatus, getSwapQuote, getDCASystemStatus, getUserTokenBalances } from './tools/dca.js';
+import { createDCAOrder, getUserDCAOrders, cancelDCAOrder, deleteDCAOrder, getDCAOrderStatus, getSwapQuote, getDCASystemStatus, getUserTokenBalances } from './tools/dca.js';
 let currentUserFrontendWalletAddress = null;
 export const setCurrentUserFrontendWalletAddress = (frontendWalletAddress) => {
     currentUserFrontendWalletAddress = frontendWalletAddress;
@@ -1172,6 +1172,38 @@ class CancelDCAOrderTool extends StructuredTool {
         }
     }
 }
+class DeleteDCAOrderTool extends StructuredTool {
+    name = "delete_dca_order";
+    description = "Permanently deletes a DCA order by order ID. Use this when user says 'delete DCA order', 'remove DCA order', or 'delete order ID'. This will completely remove the order from the system.";
+    schema = z.object({
+        orderId: z.string().describe("The ID of the DCA order to delete permanently")
+    });
+    async _call(input, runManager) {
+        try {
+            const frontendWalletAddress = currentUserFrontendWalletAddress;
+            if (!frontendWalletAddress) {
+                return JSON.stringify({ success: false, error: 'User not authenticated. Please try again.' });
+            }
+            const { orderId } = input;
+            if (!orderId) {
+                return JSON.stringify({ success: false, error: 'Missing required orderId.' });
+            }
+            try {
+                const cancelParams = { userId: frontendWalletAddress, orderId };
+                await cancelDCAOrder(cancelParams);
+            }
+            catch (cancelError) {
+                console.log(`Order ${orderId} could not be cancelled before deletion:`, cancelError);
+            }
+            const result = await deleteDCAOrder({ userId: frontendWalletAddress, orderId });
+            return JSON.stringify(result);
+        }
+        catch (error) {
+            console.error('Error in delete_dca_order:', error);
+            return JSON.stringify({ success: false, error: error.message });
+        }
+    }
+}
 class GetDCAOrderStatusTool extends StructuredTool {
     name = "get_dca_order_status";
     description = "Gets detailed status information for a specific DCA order";
@@ -1649,6 +1681,7 @@ export const ALL_TOOLS_LIST = [
     new CreateDCAOrderTool(),
     new GetUserDCAOrdersTool(),
     new CancelDCAOrderTool(),
+    new DeleteDCAOrderTool(),
     new GetDCAOrderStatusTool(),
     new GetSwapQuoteTool(),
     new GetDCASystemStatusTool(),

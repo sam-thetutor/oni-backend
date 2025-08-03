@@ -51,6 +51,7 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     "• create_payment_links - Create fixed payment link with specific amount (use only when amount is specified)\n" +
     "• get_user_stats - Get gamification stats\n" +
     "• get_crossfi_network_stats - Get network data\n" +
+    "• delete_dca_order - Permanently delete DCA order by ID (use when user says 'delete DCA order' or 'remove DCA order')\n" +
     "\n🔒 STRICT RULES:\n" +
     "• Execute ONLY the requested task - do NOT call additional tools\n" +
     "• If user says 'swap' → call ONLY execute_swap, then STOP\n" +

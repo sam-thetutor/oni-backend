@@ -150,6 +150,20 @@ export class DCAService {
             throw error;
         }
     }
+    static async deleteDCAOrder(userId, orderId) {
+        try {
+            const order = await DCAOrder.findOneAndDelete({ _id: orderId, userId });
+            if (!order) {
+                return null;
+            }
+            console.log(`DCA order ${orderId} permanently deleted for user ${userId}`);
+            return order;
+        }
+        catch (error) {
+            console.error('Error deleting DCA order:', error);
+            return null;
+        }
+    }
     static async updateDCAOrder(orderId, userId, updates) {
         try {
             const order = await DCAOrder.findOne({

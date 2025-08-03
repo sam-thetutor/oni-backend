@@ -118,6 +118,7 @@ export async function getUserDCAOrders(params) {
         let message = `📋 Your${statusText} DCA Orders (Current XFI Price: $${currentPrice.toFixed(6)}):\n\n`;
         formattedOrders.forEach((order, index) => {
             message += `${index + 1}. ${order.statusEmoji} Swap ${order.fromAmountFormatted} ${order.fromToken} to ${order.toToken}\n`;
+            message += `   • ID: ${order.id}\n`;
             message += `   • Trigger: $${order.triggerPrice} (${order.priceDistance} from current)\n`;
             message += `   • Status: ${order.status}\n`;
             message += `   • Created: ${new Date(order.createdAt).toLocaleDateString()}\n\n`;
@@ -164,6 +165,35 @@ export async function cancelDCAOrder(params) {
         return {
             success: false,
             message: `Failed to cancel DCA order: ${error.message}`,
+        };
+    }
+}
+export async function deleteDCAOrder(params) {
+    try {
+        const user = await MongoDBService.getWalletByFrontendAddress(params.userId);
+        if (!user) {
+            return {
+                success: false,
+                message: 'User wallet not found. Please connect your wallet first.',
+            };
+        }
+        const order = await DCAService.deleteDCAOrder(user.walletAddress, params.orderId);
+        if (!order) {
+            return {
+                success: false,
+                message: `DCA order with ID ${params.orderId} not found or you don't have permission to delete it.`,
+            };
+        }
+        return {
+            success: true,
+            message: `✅ DCA order ${params.orderId} has been permanently deleted from the system.`,
+        };
+    }
+    catch (error) {
+        console.error('Error deleting DCA order:', error);
+        return {
+            success: false,
+            message: `Failed to delete DCA order: ${error.message}`,
         };
     }
 }

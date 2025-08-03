@@ -271,6 +271,25 @@ export class DCAService {
   }
 
   /**
+   * Permanently delete a DCA order
+   */
+  static async deleteDCAOrder(userId: string, orderId: string): Promise<IDCAOrder | null> {
+    try {
+      const order = await DCAOrder.findOneAndDelete({ _id: orderId, userId });
+
+      if (!order) {
+        return null;
+      }
+
+      console.log(`DCA order ${orderId} permanently deleted for user ${userId}`);
+      return order;
+    } catch (error) {
+      console.error('Error deleting DCA order:', error);
+      return null;
+    }
+  }
+
+  /**
    * Update DCA order parameters
    */
   static async updateDCAOrder(
