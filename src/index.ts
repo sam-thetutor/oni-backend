@@ -65,6 +65,7 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     "• If user asks for 'fixed payment link' with specific amount → call ONLY create_payment_links with amount like '10 XFI', then STOP\n" +
     "• If user asks for 'payment link for X XFI' → call ONLY create_payment_links with amount like 'X XFI', then STOP\n" +
     "• If user asks for 'delete payment link' or 'remove payment link' → call ONLY delete_payment_link with linkId, then STOP\n" +
+    "• If user asks 'tell me about xfi' or 'what is xfi' → call ONLY xfi_market_data with empty args {}, then STOP\n" +
     "• NEVER generate fake payment link IDs - use the actual tool to create real links\n" +
     "• NEVER say 'payment link created' without calling the tool first\n" +
     "• NEVER put function calls in content - use tool_calls mechanism\n" +
