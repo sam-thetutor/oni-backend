@@ -62,7 +62,7 @@ const createGroqLLM = () => {
     apiKey: process.env.GROQ_API_KEY,
     model: model,
     temperature: 0,
-    maxTokens:1024,
+    maxTokens: 1024,
     maxRetries: 3,
     timeout: 30000,
   });

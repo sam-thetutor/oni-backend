@@ -17,7 +17,7 @@ import { TOKEN_ADDRESSES } from "./constants/tokens.js";
 import { getIO } from "./socket/index.js";
 import { emitBalanceUpdate, emitNewTransaction, emitPointsEarned, emitTransactionSuccess } from "./socket/events.js";
 import dotenv from 'dotenv';
-import { IntelligentTool } from "./tools/intelligentTool.js";
+
 import { AnalyticsService } from "./services/analytics.js";
 dotenv.config();
 
@@ -771,7 +771,7 @@ class SetUsernameTool extends StructuredTool {
 // Create Global Payment Link Tool (Explicit)
 class CreateGlobalPaymentLinkTool extends StructuredTool {
   name = "create_global_payment_link";
-  description = "Explicitly creates a global payment link that can accept any amount of contributions from multiple users. Note: The general create_payment_links tool automatically creates global links when no amount is specified.";
+  description = "Creates a global payment link for donations that can accept any amount of contributions from multiple users. Use this when user asks for 'payment link', 'donations', or 'global payment link' without specifying an amount. NO PARAMETERS NEEDED - just call this tool with empty arguments.";
   schema = z.object({});
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
@@ -809,7 +809,7 @@ class CreateGlobalPaymentLinkTool extends StructuredTool {
       );
       // Create global payment link in database
       const paymentLink = await PaymentLinkService.createGlobalPaymentLink(
-        frontendWalletAddress, 
+        user.walletAddress, // Use backend wallet address for consistency
         globalLinkID
       );
       // Return plain JSON (no markdown)
@@ -819,8 +819,8 @@ class CreateGlobalPaymentLinkTool extends StructuredTool {
         type: 'global',
         status: paymentLink.status,
         transactionHash: transactionHash,
-        paymentUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/global-paylink/${globalLinkID}`,
-        shareableLink: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/global-paylink/${globalLinkID}`,
+        paymentUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/global/${globalLinkID}`,
+        shareableLink: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/global/${globalLinkID}`,
         description: 'Global payment link allows unlimited contributions from multiple users',
         createdAt: paymentLink.createdAt,
         updatedAt: paymentLink.updatedAt
@@ -838,9 +838,9 @@ class CreateGlobalPaymentLinkTool extends StructuredTool {
 // Create Payment Links Tool
 class CreatePaymentLinksTool extends StructuredTool {
   name = "create_payment_links";
-  description = "Creates a payment link. If amount is specified, creates a fixed payment link. If no amount is specified, creates a global payment link that accepts any contributions.";
+  description = "Creates a fixed payment link with a specific amount. Use this when user specifies an amount like 'create payment link for 10 XFI'. For global donation links without amount, use create_global_payment_link instead.";
   schema = z.object({
-    amount: z.string().optional().describe("Optional: The amount for a fixed payment link in XFI (e.g., '0.1'). If not provided, creates a global payment link.")
+    amount: z.string().describe("The amount for a fixed payment link (e.g., '10 XFI', '0.5 XFI', '100 XFI'). Must include the token name 'XFI'.")
   });
 
   protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
@@ -911,16 +911,27 @@ class CreatePaymentLinksTool extends StructuredTool {
           updatedAt: paymentLink.updatedAt
         });
       } else {
+        // Extract numeric amount from the input (e.g., "3 XFI" -> "3")
+        const numericAmount = amount.replace(/\s*XFI\s*$/i, '').trim();
+        const parsedAmount = parseFloat(numericAmount);
+        
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+          return JSON.stringify({ 
+            success: false, 
+            error: `Invalid amount: ${amount}. Please provide a valid positive number.` 
+          });
+        }
+        
         // Create fixed payment link on blockchain
         const transactionHash = await PaymentLinkService.createPaymentLinkOnChain(
           walletForOps.privateKey, 
           paymentLinkID, 
-          amount
+          parsedAmount.toString()
         );
         // Create fixed payment link in database
         const paymentLink = await PaymentLinkService.createPaymentLink(
           user.walletAddress, // Use backend wallet address
-          Number(amount), 
+          parsedAmount, 
           paymentLinkID
         );
         // Record analytics for payment link creation
@@ -928,7 +939,7 @@ class CreatePaymentLinksTool extends StructuredTool {
           await AnalyticsService.recordPaymentLink(
             frontendWalletAddress,
             user.walletAddress,
-            amount,
+            parsedAmount.toString(),
             'XFI'
           );
         } catch (analyticsError) {
@@ -2066,11 +2077,4 @@ export const ALL_TOOLS_LIST = [
   new AddLiquidityTool(),
 ];
 
-// Create Intelligent Tool with access to all other tools
-const intelligentTool = new IntelligentTool(ALL_TOOLS_LIST);
-
-// Add Intelligent Tool to the beginning of the list
-export const ALL_TOOLS_LIST_WITH_INTELLIGENT = [
-  intelligentTool,
-  ...ALL_TOOLS_LIST
-]; 
+ 
