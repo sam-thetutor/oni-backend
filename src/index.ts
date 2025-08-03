@@ -67,7 +67,8 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     "• If user asks for 'fixed payment link' with specific amount → call ONLY create_payment_links with amount like '10 XFI', then STOP\n" +
     "• If user asks for 'payment link for X XFI' → call ONLY create_payment_links with amount like 'X XFI', then STOP\n" +
     "• If user asks for 'delete payment link' or 'remove payment link' → call ONLY delete_payment_link with linkId, then STOP\n" +
-    "• If user asks 'tell me about xfi' or 'what is xfi' → call ONLY xfi_market_data with empty args {}, then STOP\n" +
+    "• If user asks 'tell me about xfi' or 'what is xfi' → call ONLY xfi_market_data with empty args {}, then PRESENT the actual market data in your response\n" +
+    "• NEVER call get_user_stats after xfi_market_data - only call ONE tool per request\n" +
     "• If user says 'hello', 'hi', 'hey', or simple greetings → respond with greeting and all the things you can help the user with, NO tool calls needed\n" +
     "• If user says 'swap' or 'exchange' tokens → call ONLY execute_swap with proper parameters, then STOP\n" +
     "• NEVER generate fake payment link IDs - use the actual tool to create real links\n" +
