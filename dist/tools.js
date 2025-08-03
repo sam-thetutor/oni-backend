@@ -1467,10 +1467,19 @@ class ExecuteSwapTool extends StructuredTool {
                 });
             }
             const { fromToken, toToken, fromAmount, slippage } = input;
+            const numericAmount = fromAmount.replace(/\s*XFI\s*$/i, '').replace(/\s*USDC\s*$/i, '').trim();
+            const parsedAmount = parseFloat(numericAmount);
+            if (isNaN(parsedAmount) || parsedAmount <= 0) {
+                return JSON.stringify({
+                    success: false,
+                    error: `Invalid amount: ${fromAmount}. Please provide a valid positive number.`
+                });
+            }
             console.log('💰 ExecuteSwapTool: Swap details:');
             console.log('   From Token:', fromToken);
             console.log('   To Token:', toToken);
-            console.log('   Amount:', fromAmount);
+            console.log('   Original Amount:', fromAmount);
+            console.log('   Parsed Amount:', parsedAmount);
             console.log('   Slippage:', slippage);
             let slippageNumber = 5;
             if (slippage !== undefined) {
@@ -1537,7 +1546,7 @@ class ExecuteSwapTool extends StructuredTool {
                         args: [userModel.walletAddress]
                     });
                     const balanceFormatted = formatUnits(balance, usdcToken.decimals);
-                    const requiredAmount = parseFloat(fromAmount);
+                    const requiredAmount = parsedAmount;
                     console.log(`   USDC Balance: ${balanceFormatted}`);
                     console.log(`   Required: ${requiredAmount}`);
                     console.log(`   Sufficient: ${parseFloat(balanceFormatted) >= requiredAmount ? '✅ Yes' : '❌ No'}`);
@@ -1556,7 +1565,7 @@ class ExecuteSwapTool extends StructuredTool {
             const quote = await SwapService.getSwapQuote({
                 fromToken: mappedFromToken,
                 toToken: mappedToToken,
-                fromAmount,
+                fromAmount: parsedAmount.toString(),
                 slippage: slippageNumber
             });
             console.log('✅ ExecuteSwapTool: Quote received successfully');
@@ -1570,7 +1579,7 @@ class ExecuteSwapTool extends StructuredTool {
             const swapResult = await SwapService.executeSwap(userModel, {
                 fromToken: mappedFromToken,
                 toToken: mappedToToken,
-                fromAmount,
+                fromAmount: parsedAmount.toString(),
                 slippage: slippageNumber
             });
             console.log('📊 ExecuteSwapTool: Swap result received');

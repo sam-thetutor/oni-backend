@@ -42,6 +42,8 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     "🚨 CRITICAL: For payment links - if no amount specified, use create_global_payment_link with empty args {}. If amount specified, use create_payment_links with amount like '10 XFI'.\n" +
     "🚨 CRITICAL: NEVER output <function=send_token> or similar in content - use tool_calls instead.\n" +
     "🚨 CRITICAL: NEVER output <function=delete_payment_link> or similar in content - use tool_calls instead.\n" +
+    "🚨 CRITICAL: NEVER output <function=execute_swap> or similar in content - use tool_calls instead.\n" +
+    "🚨 CRITICAL: NEVER put function calls in content field - ALWAYS use tool_calls array for ALL tools\n" +
     "\n🔧 KEY TOOLS:\n" +
     "• get_balance - Get wallet balance\n" +
     "• execute_swap - Execute token swaps (USDC↔XFI, etc.)\n" +
@@ -67,6 +69,7 @@ const callModel = async (state: typeof GraphAnnotation.State) => {
     "• If user asks for 'delete payment link' or 'remove payment link' → call ONLY delete_payment_link with linkId, then STOP\n" +
     "• If user asks 'tell me about xfi' or 'what is xfi' → call ONLY xfi_market_data with empty args {}, then STOP\n" +
     "• If user says 'hello', 'hi', 'hey', or simple greetings → respond with greeting and all the things you can help the user with, NO tool calls needed\n" +
+    "• If user says 'swap' or 'exchange' tokens → call ONLY execute_swap with proper parameters, then STOP\n" +
     "• NEVER generate fake payment link IDs - use the actual tool to create real links\n" +
     "• NEVER say 'payment link created' without calling the tool first\n" +
     "• NEVER put function calls in content - use tool_calls mechanism\n" +
@@ -192,9 +195,13 @@ const shouldContinue = (state: typeof GraphAnnotation.State) => {
   const recentToolMessages = recentMessages.filter(msg => msg._getType() === "tool");
   const recentAIMessages = recentMessages.filter(msg => msg._getType() === "ai");
   
+  // If we have tool messages and the last AI message has no tool calls, allow it to respond
   if (recentToolMessages.length > 0 && recentAIMessages.length > 0) {
-    console.log("🛑 Tool executed and AI responded - stopping conversation (single-task mode)");
-    return END;
+    const lastAIMessage = recentAIMessages[recentAIMessages.length - 1] as AIMessage;
+    if (!lastAIMessage.tool_calls || lastAIMessage.tool_calls.length === 0) {
+      console.log("🛑 Tool executed and AI formatted response - stopping conversation (single-task mode)");
+      return END;
+    }
   }
 
   // Check for infinite loop patterns (fallback)
