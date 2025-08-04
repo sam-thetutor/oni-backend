@@ -202,11 +202,6 @@ export const PAYLINK_ABI =
 				"internalType": "string",
 				"name": "linkID",
 				"type": "string"
-			},
-			{
-				"internalType": "uint256",
-				"name": "amount",
-				"type": "uint256"
 			}
 		],
 		"name": "contributeToGlobalPaymentLink",
@@ -223,7 +218,7 @@ export const PAYLINK_ABI =
 			},
 			{
 				"internalType": "uint256",
-				"name": "amount",
+				"name": "_amount",
 				"type": "uint256"
 			}
 		],
@@ -264,6 +259,13 @@ export const PAYLINK_ABI =
 			}
 		],
 		"name": "createInvoice",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "emergencyWithdraw",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"

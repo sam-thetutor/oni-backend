@@ -2155,6 +2155,68 @@ class GetSupportedSwapTokensTool extends StructuredTool {
   }
 }
 
+// Debug Payment Link Tool
+class DebugPaymentLinkTool extends StructuredTool {
+  name = "debug_payment_link";
+  description = "Debugs payment link issues by checking blockchain data vs database data. Use this when payment links are not working correctly.";
+  schema = z.object({
+    linkId: z.string().describe("The ID of the payment link to debug")
+  });
+
+  protected async _call(input: z.infer<typeof this.schema>, runManager?: any): Promise<string> {
+    try {
+      const { linkId } = input;
+      
+      console.log(`🔍 Debugging payment link: ${linkId}`);
+
+      // Get payment link from database
+      const paymentLink = await PaymentLink.findOne({ linkId }) as any;
+      
+      // Get blockchain data
+      const { ContractReadService } = await import('./services/contractread.js');
+      const contractReadService = new ContractReadService();
+      const blockchainData = await contractReadService.checkPaymentLinkStatus(linkId);
+
+      const debugInfo = {
+        linkId: linkId,
+        database: paymentLink ? {
+          exists: true,
+          amount: paymentLink.amount,
+          status: paymentLink.status,
+          userId: paymentLink.userId
+        } : {
+          exists: false
+        },
+        blockchain: blockchainData.success ? {
+          exists: true,
+          amount: blockchainData.data.amount,
+          amountInXFI: blockchainData.data.amountInXFI,
+          status: blockchainData.data.status,
+          creator: blockchainData.data.creator
+        } : {
+          exists: false,
+          error: blockchainData.error
+        }
+      };
+
+      console.log('🔍 Debug Info:', debugInfo);
+
+      return JSON.stringify({
+        success: true,
+        debugInfo: debugInfo,
+        message: `Payment link debug information for ${linkId}`
+      });
+
+    } catch (error: any) {
+      console.error('Error in debug_payment_link:', error);
+      return JSON.stringify({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+  }
+}
+
 // Export tools list
 export const ALL_TOOLS_LIST = [
   // Wallet & Transaction Tools
@@ -2204,6 +2266,9 @@ export const ALL_TOOLS_LIST = [
   
   // Liquidity Tools
   new AddLiquidityTool(),
+  
+  // Debug Tools
+  new DebugPaymentLinkTool(),
 ];
 
  

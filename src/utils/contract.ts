@@ -53,7 +53,9 @@ export const createFixedPaymentLink = async (
     amount: string
 ): Promise<ethers.ContractTransactionResponse> => {
     const contract = new ethers.Contract(PAYLINK_CONTRACT_ADDRESS, PAYLINK_ABI, wallet);
-    return contract.createFixedPaymentLink(linkID, amount);
+    // Convert amount from XFI to wei
+    const amountInWei = convertToWei(amount);
+    return contract.createFixedPaymentLink(linkID, amountInWei);
 };
 
 export const contributeToGlobalPaymentLink = async (
@@ -62,7 +64,9 @@ export const contributeToGlobalPaymentLink = async (
     amount: string
 ): Promise<ethers.ContractTransactionResponse> => {
     const contract = new ethers.Contract(PAYLINK_CONTRACT_ADDRESS, PAYLINK_ABI, wallet);
-    return contract.contributeToGlobalPaymentLink(linkID, { value: amount });
+    // Convert amount from XFI to wei
+    const amountInWei = convertToWei(amount);
+    return contract.contributeToGlobalPaymentLink(linkID, { value: amountInWei });
 };
 
 export const payFixedPaymentLink = async (
@@ -71,7 +75,9 @@ export const payFixedPaymentLink = async (
     amount: string
 ): Promise<ethers.ContractTransactionResponse> => {
     const contract = new ethers.Contract(PAYLINK_CONTRACT_ADDRESS, PAYLINK_ABI, wallet);
-    return contract.payFixedPaymentLink(linkID, { value: amount });
+    // Convert amount from XFI to wei
+    const amountInWei = convertToWei(amount);
+    return contract.payFixedPaymentLink(linkID, { value: amountInWei });
 };
 
 export const createInvoice = async (
@@ -89,7 +95,9 @@ export const payInvoice = async (
     amount: string
 ): Promise<ethers.ContractTransactionResponse> => {
     const contract = new ethers.Contract(PAYLINK_CONTRACT_ADDRESS, PAYLINK_ABI, wallet);
-    return contract.payInvoice(invoiceId, { value: amount });
+    // Convert amount from XFI to wei
+    const amountInWei = convertToWei(amount);
+    return contract.payInvoice(invoiceId, { value: amountInWei });
 };
 
 export const getGlobalPaymentLink = async (
